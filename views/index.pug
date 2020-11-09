@@ -1,0 +1,224 @@
+extends layout
+
+block content
+  .jumbotron
+    .container
+      h1.display-3 Bitcoin Supply
+      table.table.table-striped
+        tbody
+          tr
+            th Current Supply:
+            td 18,527,935.72837285 BTC
+          tr
+            th Total Possible Supply:
+            td 20,989,281.09201922 BTC
+          tr
+            th Amount of Total Supply Released
+            td 87.968%
+          tr
+            th Confirmed Lost
+            td #{helpers.format(total_lost/100000000, 8)} BTC
+
+      p As of block 654,724 there can only ever be 20,989,281.09201922 bitcoin in existance.
+      p This figure only includes verifyably lost coin. A very significant amount of coin may also be irretrevable due to other factors including key loss and spends to addresses with very likely unknown private keys.
+      p
+        a.btn.btn-primary.btn-lg(href='#', role='button') Learn more &raquo;
+
+  .container
+    .row
+      .col
+        h1 Losses
+        table.table.table-striped
+          thead
+            tr
+              th.text-right Block
+              th Irrecoverably Lost
+          tbody
+            each block in losses
+              tr
+                td.text-right
+                  a(href='/block/'+block.block_number) #{block.block_number}
+                td #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC
+            tr
+              td.text-right(colspan=2)
+                a.btn.btn-primary(href='/losses') Full List &gt;&gt;
+
+      .col
+        h1 Halvings
+        table.table.table-striped
+          thead
+            tr
+              th.text-right Block
+              th Supply Per Block
+              th Date
+          tbody
+            tr
+              td.text-right
+                a(href='/block/0') 0
+              td 50.00000000 BTC
+              td 2009-01-03 18:15:05
+            tr
+              td.text-right
+                a(href='/block/210000') 210,000
+              td 25.00000000 BTC
+              td 2012-11-28 15:24:38
+            tr
+              td.text-right
+                a(href='/block/420000') 420,000
+              td 12.50000000 BTC
+              td 2016-07-09 16:46:13
+            tr
+              td.text-right
+                a(href='/block/630000') 630,000
+              td 6.25000000 BTC
+              td 2020-05-11 19:23:43
+            tr
+              td.text-right
+                a(href='/block/840000') 840,000
+              td 3.12500000 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/1050000') 1,050,000
+              td 1.56250000 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/1260000') 1,260,000
+              td 0.78125000 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/1470000') 1,470,000
+              td 0.39062500 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/1680000') 1,680,000
+              td 0.19531250 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/1890000') 1,890,000
+              td 0.09765625 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/2100000') 2,100,000
+              td 0.04882812 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/2310000') 2,310,000
+              td 0.02441406 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/2520000') 2,520,000
+              td 0.01220703 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/2730000') 2,730,000
+              td 0.00610351 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/2940000') 2,940,000
+              td 0.00305175 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/3150000') 3,150,000
+              td 0.00152587 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/3360000') 3,360,000
+              td 0.00076293 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/3570000') 3,570,000
+              td 0.00038146 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/3780000') 3,780,000
+              td 0.00019073 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/3990000') 3,990,000
+              td 0.00009536 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/4200000') 4,200,000
+              td 0.00004768 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/4410000') 4,410,000
+              td 0.00002384 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/4620000') 4,620,000
+              td 0.00001192 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/4830000') 4,830,000
+              td 0.00000596 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/5040000') 5,040,000
+              td 0.00000298 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/5250000') 5,250,000
+              td 0.00000149 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/5460000') 5,460,000
+              td 0.00000074 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/5670000') 5,670,000
+              td 0.00000037 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/5880000') 5,880,000
+              td 0.00000018 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/6090000') 6,090,000
+              td 0.00000009 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/6300000') 6,300,000
+              td 0.00000004 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/6510000') 6,510,000
+              td 0.00000002 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/6720000') 6,720,000
+              td 0.00000001 BTC
+              td
+            tr
+              td.text-right
+                a(href='/block/6930000') 6,930,000
+              td 0.00000000 BTC
+              td

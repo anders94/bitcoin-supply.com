@@ -1,0 +1,61 @@
+extends layout
+
+block content
+  main(role='main')
+    .jumbotron
+      .container
+        if block.allowed_supply != block.new_supply
+          .alert.alert-danger
+            h1.display-3 Block #{helpers.format(block.block_number)}
+            h3 #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')} (#{moment(block.block_timestamp).from()})
+            p #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC was lost in this block.
+        else
+          .alert.alert-success
+            h1.display-3 Block #{helpers.format(block.block_number)}
+            h3 #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')} (#{moment(block.block_timestamp).from()})
+            p No supply is lost in this block.
+        table.table.table-striped
+          tbody
+            tr
+              th Allowed Supply
+              td #{helpers.format(block.allowed_supply/100000000, 8)} BTC
+            tr
+              th Fees Surrendered
+              td #{helpers.format(block.fees/100000000, 8)} BTC
+            tr
+              th Supply Created
+              td #{helpers.format(block.new_supply/100000000, 8)} BTC
+            tr
+              th Forefited Supply
+              td #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC
+            tr
+              th Total Supply as of this Block
+              td #{helpers.format(block.current_total_supply/100000000, 8)} BTC
+            tr
+              th Blocks until next halving
+              td= helpers.format(block.blocks_till_halving)
+
+    .container
+      if block.description
+        p= block.description
+      else
+        if block.allowed_supply == block.new_supply
+          p This block collects all #{helpers.format(block.allowed_supply / 100000000, 8)} BTC of new supply allowed
+            if block.fees > 0
+              |  as well as the #{helpers.format(block.fees/100000000, 8)} BTC in fees transactions within the block have surrendered
+            |.
+        else
+          p This block does not claim all available bitcoin. #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC is irrecoverably lost in this block reducing the overall bitcoin that can ever exist.
+          if (block.allowed_supply - block.new_supply) == block.fees
+            p In this case, the miner of this block claimed all #{helpers.format(block.allowed_supply/100000000, 8)} BTC of the new supply but neglected to collect the #{helpers.format(block.fees/100000000, 8)} BTC in fees also available. Therefore, the net new supply that entered the system within this block is only #{helpers.format(block.new_supply/100000000, 8)} BTC.
+            p It is possible for the overall bitcoin in the system to go negative in cases where fees that go uncollected add up to more than the available new supply in a block. As the allowed supply per block goes down over the years and fees become a much higher percentage of the available rewards, errors like this become more likely to reduce the overall supply of bitcoin. Once the block reward reaches zero, any error in fee colletion will reduce the overall supply of bitcoin.
+
+    .container
+      .row
+        .col
+          if block.block_number > 0
+            a.btn.btn-primary(href='/block/'+(Number(block.block_number)-1)) &lt;&lt; Previous
+        .col.text-center
+          a.btn.btn-primary(href='/current') Latest Block
+        .col.text-right
+          a.btn.btn-primary(href='/block/'+(Number(block.block_number)+1)) Next &gt;&gt;

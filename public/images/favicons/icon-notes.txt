@@ -1,0 +1,2 @@
+zurvey blue: #00335a
+icon font: Arial Rounded MT

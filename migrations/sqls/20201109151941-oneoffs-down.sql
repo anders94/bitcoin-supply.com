@@ -1,0 +1,1 @@
+DELETE FROM oneoffs WHERE block_number IN (0, 91722, 91812, 265298, 300920, 300923);
