@@ -95,6 +95,7 @@ const main = async () => {
 	     current_total_supply.toString(), blocks_till_halving, row.anomoly, row.description]);
 
     };
+    db.close();
 
 };
 

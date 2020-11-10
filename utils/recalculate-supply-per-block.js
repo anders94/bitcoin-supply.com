@@ -19,6 +19,7 @@ const main = async () => {
              WHERE block_number = $2`,
 	    [current_total_supply.toString(), row.block_number, blocks_till_halving]);
     };
+    db.close();
 
 };
 
