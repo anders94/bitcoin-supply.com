@@ -24,13 +24,45 @@ router.get('/', async (req, res, next) => {
 });
 
 router.get('/losses', async (req, res, next) => {
-    const losses = await db.query(
-        `SELECT *
-         FROM blocks
-         WHERE anomoly = true
-         ORDER BY block_number ASC`);
+    return res.redirect('/losses/0');
+});
 
-    return res.render('losses', { title: 'Losses | Bitcoin Supply', losses: losses.rows });
+router.get('/losses/:page', [check('page', 'Sorry, the page number must be a positive integer.').trim().isInt({gt: -1})], async (req, res, next) => {
+    const errors = validationResult(req);
+    if (errors.isEmpty()) {
+	const { page } = req.params;
+	const losses = await db.query(
+            `SELECT *
+             FROM blocks
+             WHERE anomoly = true
+             ORDER BY block_number ASC
+             LIMIT $1
+             OFFSET $2`,
+	    [config.paginationSize, config.paginationSize*page]);
+
+	const totalRes = await db.query(
+            `SELECT COUNT(*) AS total
+             FROM blocks
+             WHERE anomoly = true`);
+
+	return res.render('losses', {
+	    title: 'Losses | Bitcoin Supply',
+	    losses: losses.rows,
+	    page: page,
+	    total: totalRes.rows[0].total,
+	    paginationSize: config.paginationSize
+	});
+    }
+    else {
+	console.log(errors);
+	return res.render('error', {
+	    message: 'Whoops! That doesn\'t look right.',
+	    error: {
+		status: 'Page must be a positive integer.',
+		stack: 'The URL does not contain a page numbered with a positive integer..'
+	    }
+	});
+    }
 });
 
 router.post('/search', [], (req, res, next) => {

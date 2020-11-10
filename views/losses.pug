@@ -3,6 +3,22 @@ extends layout
 block content
   .container
     h1 Bitcoin Supply Losses
+    nav(aria-label='Page navigation')
+      ul.pagination.justify-content-center
+        li.page-item.disabled
+          a.page-link(href='/losses/0' tabindex=-1) &lt;&lt;
+        - let p = 0
+        while p < total/paginationSize
+          if p == page
+            li.page-item.disabled
+              a.page-link(href='/losses/'+p) #{p+1}
+          else
+            li.page-item
+              a.page-link(href='/losses/'+p) #{p+1}
+          - p++
+        li.page-item.disabled
+          a.page-link(href='/losses/0' tabindex=-1) &gt;&gt;
+
     table.table.table-striped
       thead
         tr
@@ -13,8 +29,24 @@ block content
       tbody
         each block, index in losses
           tr
-            th ##{index+1}
+            th ##{page*paginationSize+index+1}
             td.text-center
               a(href='/block/'+block.block_number) #{block.block_number}
             td.text-center #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC
             td.text-center #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')} (#{moment(block.block_timestamp).from()})
+
+    nav(aria-label='Page navigation')
+      ul.pagination.justify-content-center
+        li.page-item.disabled
+          a.page-link(href='/losses/0' tabindex=-1) &lt;&lt;
+        - p = 0
+        while p < total/paginationSize
+          if p == page
+            li.page-item.disabled
+              a.page-link(href='/losses/'+p) #{p+1}
+          else
+            li.page-item
+              a.page-link(href='/losses/'+p) #{p+1}
+          - p++
+        li.page-item.disabled
+          a.page-link(href='/losses/0' tabindex=-1) &gt;&gt;

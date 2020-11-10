@@ -15,5 +15,8 @@ module.exports = {
             user: process.env.EMAILUSER || 'project.1',
             pass: process.env.EMAILPASSWORD || 'secret.1'
         }
-    }
+    },
+
+    paginationSize: 750
+
 }
