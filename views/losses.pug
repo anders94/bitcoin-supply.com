@@ -5,19 +5,33 @@ block content
     h1 Bitcoin Supply Losses
     nav(aria-label='Page navigation')
       ul.pagination.justify-content-center
-        li.page-item.disabled
-          a.page-link(href='/losses/0' tabindex=-1) &lt;&lt;
+        if page == 0
+          li.page-item.disabled
+            a.page-link(href='/losses/0', tabindex=-1) &lt;&lt;
+        else
+          li.page-item
+            a.page-link(href='/losses/'+(page-1), tabindex=-1) &lt;&lt;
         - let p = 0
+        - let etc = false
         while p < total/paginationSize
           if p == page
             li.page-item.disabled
               a.page-link(href='/losses/'+p) #{p+1}
-          else
+          else if p < 2 || p > Math.floor(total/paginationSize)-2 || p >= page-3 && p <= Number(page)+3
+            - etc = false
             li.page-item
               a.page-link(href='/losses/'+p) #{p+1}
+          else if !etc
+            - etc = true
+            li.page-item.disabled
+              a.page-link(href='/losses/'+p) ...
           - p++
-        li.page-item.disabled
-          a.page-link(href='/losses/0' tabindex=-1) &gt;&gt;
+        if page == Math.floor(total/paginationSize)
+          li.page-item.disabled
+            a.page-link(href='/losses/0', tabindex=-1) &gt;&gt;
+        else
+          li.page-item
+            a.page-link(href='/losses/'+(Number(page)+1), tabindex=-1) &gt;&gt;
 
     table.table.table-striped
       thead
@@ -33,20 +47,34 @@ block content
             td.text-center
               a(href='/block/'+block.block_number) #{block.block_number}
             td.text-center #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC
-            td.text-center #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')} (#{moment(block.block_timestamp).from()})
+            td.text-center #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')}
 
     nav(aria-label='Page navigation')
       ul.pagination.justify-content-center
-        li.page-item.disabled
-          a.page-link(href='/losses/0' tabindex=-1) &lt;&lt;
+        if page == 0
+          li.page-item.disabled
+            a.page-link(href='/losses/0', tabindex=-1) &lt;&lt;
+        else
+          li.page-item
+            a.page-link(href='/losses/'+(page-1), tabindex=-1) &lt;&lt;
         - p = 0
+        - etc = false
         while p < total/paginationSize
           if p == page
             li.page-item.disabled
               a.page-link(href='/losses/'+p) #{p+1}
-          else
+          else if p < 2 || p > Math.floor(total/paginationSize)-2 || p >= page-3 && p <= Number(page)+3
+            - etc = false
             li.page-item
               a.page-link(href='/losses/'+p) #{p+1}
+          else if !etc
+            - etc = true
+            li.page-item.disabled
+              a.page-link(href='/losses/'+p) ...
           - p++
-        li.page-item.disabled
-          a.page-link(href='/losses/0' tabindex=-1) &gt;&gt;
+        if page == Math.floor(total/paginationSize)
+          li.page-item.disabled
+            a.page-link(href='/losses/0', tabindex=-1) &gt;&gt;
+        else
+          li.page-item
+            a.page-link(href='/losses/'+(Number(page)+1), tabindex=-1) &gt;&gt;

@@ -17,6 +17,6 @@ module.exports = {
         }
     },
 
-    paginationSize: 750
+    paginationSize: 250
 
 }
