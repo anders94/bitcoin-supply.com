@@ -8,19 +8,19 @@ block content
         tbody
           tr
             th Current Supply:
-            td 18,527,935.72837285 BTC
+            td #{helpers.format(current_supply/100000000, 8)} BTC
           tr
             th Total Possible Supply:
-            td 20,989,281.09201922 BTC
+            td #{helpers.format(total_possible_supply/100000000, 8)} BTC
           tr
             th Amount of Total Supply Released
-            td 87.968%
+            td #{((current_supply/total_possible_supply)*100).toFixed(3)}%
           tr
             th Confirmed Lost
             td #{helpers.format(total_lost/100000000, 8)} BTC
 
-      p As of block 654,724 there can only ever be 20,989,281.09201922 bitcoin in existance.
-      p This figure only includes verifyably lost coin. A very significant amount of coin may also be irretrevable due to other factors including key loss and spends to addresses with very likely unknown private keys.
+      p As of block #{helpers.format(latest_block.block_number)} there can only ever be #{helpers.format(total_possible_supply/100000000, 8)} bitcoin in existance.
+      p This figure only includes verifyably lost coin. A very significant amount of coin may also be irretrevable due to other factors including key loss and spends to addresses with very likely unknown private keys. These losses are impossible to quantify.
       p
         a.btn.btn-primary.btn-lg(href='#', role='button') Learn more &raquo;
 
