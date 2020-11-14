@@ -37,7 +37,7 @@ block content
             each block in losses
               tr
                 td.text-right
-                  a(href='/block/'+block.block_number) #{block.block_number}
+                  a(href='/block/'+block.block_number) #{helpers.format(block.block_number)}
                 td #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC
             tr
               td.text-right(colspan=2)
