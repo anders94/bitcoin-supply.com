@@ -16,11 +16,11 @@ block content
             th Amount of Total Supply Released
             td #{((current_supply/total_possible_supply)*100).toFixed(3)}%
           tr
-            th Confirmed Lost
+            th Confirmed Lost *
             td #{helpers.format(total_lost/100000000, 8)} BTC
 
       p As of block <a href="/block/#{latest_block.block_number}">#{helpers.format(latest_block.block_number)}</a> there can only ever be #{helpers.format(total_possible_supply/100000000, 8)} bitcoin in existance.
-      p This figure only includes verifyably lost coin. A very significant amount of coin may also be irretrevable due to other factors including key loss and spends to addresses with very likely unknown private keys. These losses are impossible to quantify.
+      p * This figure only includes verifyably lost coin. A very significant amount of coin may also be irretrevable due to other factors including key loss and spends to addresses with very likely unknown private keys. These losses are impossible to quantify.
       p
         a.btn.btn-primary(href='/current') Latest Block
 
