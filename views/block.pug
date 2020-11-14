@@ -7,12 +7,16 @@ block content
         if block.allowed_supply != block.new_supply
           .alert.alert-danger
             h1.display-3 Block #{helpers.format(block.block_number)}
-            h3 #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')} (#{moment(block.block_timestamp).from()})
+            h3 #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')}
+              if moment().isAfter(block.block_timestamp)
+                |  (#{moment(block.block_timestamp).from()})
             p #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC was lost in this block.
         else
           .alert.alert-success
             h1.display-3 Block #{helpers.format(block.block_number)}
-            h3 #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')} (#{moment(block.block_timestamp).from()})
+            h3 #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')}
+              if moment().isAfter(block.block_timestamp)
+                |  (#{moment(block.block_timestamp).from()})
             p No supply is lost in this block.
         table.table.table-striped
           tbody
