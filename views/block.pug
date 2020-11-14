@@ -52,10 +52,12 @@ block content
               |  as well as the #{helpers.format(block.fees/100000000, 8)} BTC in fees transactions within the block have surrendered
             |.
         else
-          p This block does not claim all available bitcoin. #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC is irrecoverably lost in this block reducing the overall bitcoin that can ever exist.
+          p #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC is irrecoverably lost in this block reducing the overall bitcoin that can ever exist.
           if (block.allowed_supply - block.new_supply) == block.fees
             p In this case, the miner of this block claimed all #{helpers.format(block.allowed_supply/100000000, 8)} BTC of the new supply but neglected to collect the #{helpers.format(block.fees/100000000, 8)} BTC in fees also available. Therefore, the net new supply that entered the system within this block is only #{helpers.format(block.new_supply/100000000, 8)} BTC.
             p It is possible for the overall bitcoin in the system to go negative in cases where fees that go uncollected add up to more than the available new supply in a block. As the allowed supply per block goes down over the years and fees become a much higher percentage of the available rewards, errors like this become more likely to reduce the overall supply of bitcoin. Once the block reward reaches zero, any error in fee colletion will reduce the overall supply of bitcoin.
+          else if (block.allowed_supply - block.new_supply) == block.op_return_loss
+            p Transaction(s) in this block spend coin with OP_RETURN which makes them unspendable in the future and therefore permanently lost.
 
     .container
       .row
