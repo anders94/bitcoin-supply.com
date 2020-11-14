@@ -27,6 +27,9 @@ block content
               th Fees Surrendered
               td #{helpers.format(block.fees/100000000, 8)} BTC
             tr
+              th Coins Lost to OP_RETURN
+              td #{helpers.format(block.op_return_loss/100000000, 8)} BTC
+            tr
               th Supply Created
               td #{helpers.format(block.new_supply/100000000, 8)} BTC
             tr
