@@ -19,10 +19,10 @@ block content
             th Confirmed Lost
             td #{helpers.format(total_lost/100000000, 8)} BTC
 
-      p As of block #{helpers.format(latest_block.block_number)} there can only ever be #{helpers.format(total_possible_supply/100000000, 8)} bitcoin in existance.
+      p As of block <a href="/block/#{latest_block.block_number}">#{helpers.format(latest_block.block_number)}</a> there can only ever be #{helpers.format(total_possible_supply/100000000, 8)} bitcoin in existance.
       p This figure only includes verifyably lost coin. A very significant amount of coin may also be irretrevable due to other factors including key loss and spends to addresses with very likely unknown private keys. These losses are impossible to quantify.
       p
-        a.btn.btn-primary.btn-lg(href='#', role='button') Learn more &raquo;
+        a.btn.btn-primary(href='/current') Latest Block
 
   .container
     .row

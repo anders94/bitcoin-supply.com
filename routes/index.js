@@ -131,6 +131,8 @@ router.get('/block/:block_number', [check('block_number', 'Sorry, a block\'s ID 
 		const blocksAhead = block_number - block.rows[0].block_number;
 		theroreticalBlock.block_timestamp = moment(block.rows[0].block_timestamp).add(10 * blocksAhead, 'minutes').format();
 		theroreticalBlock.allowed_supply = helpers.allowed_supply(block_number);
+		//theroreticalBlock.current_total_supply = 0;
+		theroreticalBlock.blocks_till_halving = 210000 - block_number % 210000;
 		return res.render('theroretical-block', {title: 'Block '+helpers.format(block_number)+' (unmined) | Bitcoin Supply',
 							 block_number: block_number, block: theroreticalBlock});
 	    }

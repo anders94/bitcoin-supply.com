@@ -6,16 +6,16 @@ block content
       .container
         .alert.alert-info
           h1.display-3 Block #{helpers.format(block_number)}
-          h3 #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')} (#{moment(block.block_timestamp).from()})
+          h3 #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')} (estimated)
           p This block hasn't been mined yet.
         table.table.table-striped
           tbody
             tr
               th Allowed Supply
               td #{helpers.format(block.allowed_supply/100000000, 8)} BTC
-            tr
-              th Total Supply as of this Block
-              td #{helpers.format(block.current_total_supply/100000000, 8)} BTC
+            //tr
+            //  th Total Supply as of this Block
+            //  td #{helpers.format(block.current_total_supply/100000000, 8)} BTC
             tr
               th Blocks until next halving
               td= helpers.format(block.blocks_till_halving)
