@@ -2,8 +2,9 @@
 -- table: blocks
 -----------------
 CREATE TABLE IF NOT EXISTS blocks (
+  created              TIMESTAMP  NOT NULL DEFAULT now(),
   block_number         INT        NOT NULL UNIQUE,
-  block_timestamp      TIMESTAMP,
+  block_timestamp      TIMESTAMP  NOT NULL,
   input_sum            BIGINT,
   output_sum           BIGINT,
   fees                 BIGINT,
@@ -21,6 +22,7 @@ CREATE TABLE IF NOT EXISTS blocks (
 -- table: oneoffs
 -----------------
 CREATE TABLE IF NOT EXISTS oneoffs (
+  created              TIMESTAMP  NOT NULL DEFAULT now(),
   block_number         INT        NOT NULL UNIQUE,
   new_supply           BIGINT     NOT NULL,
   description          TEXT       NOT NULL,
