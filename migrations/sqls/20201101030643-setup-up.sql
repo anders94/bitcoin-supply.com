@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS blocks (
   input_sum            BIGINT,
   output_sum           BIGINT,
   fees                 BIGINT,
-  op_return_loss       BIGINT,
+  transactional_loss   BIGINT,
   allowed_supply       BIGINT     NOT NULL,
   new_supply           BIGINT,
   current_total_supply BIGINT,
