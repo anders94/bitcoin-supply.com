@@ -26,26 +26,22 @@ const main = async () => {
     if (heightRes.rows[0])
 	block_number = Number(heightRes.rows[0].block_number);
 
-    console.log(`Fetching ${block_number-10} through latest block.`);
+    console.log(`Fetching ${block_number-100} through latest block.`);
 
     const query = `
       SELECT 
-         t.block_number,
-         t.block_timestamp,
-         COALESCE(SUM(t.input_value), 0) AS input_sum,
-         COALESCE(SUM(t.output_value), 0) AS output_sum,
-         COALESCE(SUM(t.fee), 0) AS fees,
+         block_number,
+         block_timestamp,
+         COALESCE(SUM(input_value), 0) AS input_sum,
+         COALESCE(SUM(output_value), 0) AS output_sum,
+         COALESCE(SUM(fee), 0) AS fees,
          ( SELECT COALESCE(SUM(value), 0)
            FROM \`bigquery-public-data.crypto_bitcoin.outputs\`
-           WHERE block_number = t.block_number
+           WHERE block_number = block_number
              AND script_asm like 'OP_RETURN%' ) AS transactional_loss,
-         COALESCE(SUM(t.output_value), 0) - COALESCE(SUM(t.input_value), 0) -
-           ( SELECT COALESCE(SUM(value), 0)
-             FROM \`bigquery-public-data.crypto_bitcoin.outputs\`
-             WHERE block_number = t.block_number
-               AND script_asm like 'OP_RETURN%' ) AS new_supply
-       FROM \`bigquery-public-data.crypto_bitcoin.transactions\` t
-       WHERE block_number >= ${block_number-0}
+         COALESCE(SUM(output_value), 0) - COALESCE(SUM(input_value), 0) AS new_supply 
+       FROM \`bigquery-public-data.crypto_bitcoin.transactions\`
+       WHERE block_number >= ${block_number-100}
        GROUP BY block_number, block_timestamp
        ORDER BY block_number ASC`;
 
