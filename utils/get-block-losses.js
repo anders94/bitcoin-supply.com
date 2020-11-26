@@ -55,10 +55,10 @@ const main = async () => {
         let row = rows[r];
         row.allowed_supply = allowedSupply(row.block_number);
 	const blocks_till_halving = 210000 - (row.block_number % 210000);
-	row.anomoly = (row.allowed_supply != row.new_supply);
+	row.loss = (row.allowed_supply != row.new_supply);
 	row.description = '';
 	if (oneoffs[row.block_number]) {
-	    row.anomoly = true;
+	    row.loss = true;
 	    row.new_supply = oneoffs[row.block_number].new_supply;
 	    row.description = oneoffs[row.block_number].description;
 	}
@@ -72,12 +72,12 @@ const main = async () => {
         console.log(row.block_number + '\t' + JSON.stringify(
 	    [row.block_number, row.block_timestamp.value, row.input_sum.toString(), row.output_sum.toString(),
 	     row.fees.toString(), row.transactional_loss.toString(), row.allowed_supply, row.new_supply.toString(),
-	     current_total_supply.toString(), blocks_till_halving, row.anomoly, row.description]));
+	     current_total_supply.toString(), blocks_till_halving, row.loss, row.description]));
 
 	await db.query(
 	    `INSERT INTO blocks (
                block_number, block_timestamp, input_sum, output_sum, fees, transactional_loss, allowed_supply,
-               new_supply, current_total_supply, blocks_till_halving, anomoly, description
+               new_supply, current_total_supply, blocks_till_halving, loss, description
              ) VALUES (
                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
              )
@@ -85,10 +85,10 @@ const main = async () => {
              DO
                UPDATE SET
                  block_timestamp=$2, input_sum=$3, output_sum=$4, fees=$5, transactional_loss=$6, allowed_supply=$7,
-                 new_supply=$8, current_total_supply=$9, blocks_till_halving=$10, anomoly=$11, description=$12`,
+                 new_supply=$8, current_total_supply=$9, blocks_till_halving=$10, loss=$11, description=$12`,
 	    [row.block_number, row.block_timestamp.value, row.input_sum.toString(), row.output_sum.toString(),
 	     row.fees.toString(), row.transactional_loss.toString(), row.allowed_supply, row.new_supply.toString(),
-	     current_total_supply.toString(), blocks_till_halving, row.anomoly, row.description]);
+	     current_total_supply.toString(), blocks_till_halving, row.loss, row.description]);
 
     };
     db.close();

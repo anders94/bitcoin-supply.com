@@ -15,12 +15,12 @@ router.get('/', async (req, res, next) => {
     const total_lost = await db.query(
 	`SELECT SUM(allowed_supply) - SUM(new_supply) AS lost
          FROM blocks
-         where anomoly = true`);
+         WHERE loss = true`);
 
     const losses = await db.query(
         `SELECT *
          FROM blocks
-         WHERE anomoly = true
+         WHERE loss = true
          ORDER BY block_number ASC
          LIMIT 50`);
 
@@ -53,7 +53,7 @@ router.get('/losses/:page', [check('page', 'Sorry, the page number must be a pos
 	const losses = await db.query(
             `SELECT *
              FROM blocks
-             WHERE anomoly = true
+             WHERE loss = true
              ORDER BY block_number ASC
              LIMIT $1
              OFFSET $2`,
@@ -62,7 +62,7 @@ router.get('/losses/:page', [check('page', 'Sorry, the page number must be a pos
 	const totalRes = await db.query(
             `SELECT COUNT(*) AS total
              FROM blocks
-             WHERE anomoly = true`);
+             WHERE loss = true`);
 
 	return res.render('losses', {
 	    title: 'Losses | Bitcoin Supply',

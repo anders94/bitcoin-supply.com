@@ -37,8 +37,8 @@ const getOpReturnLosses = async (block_number, latest_block) => {
 
     for (let r=0; r<rows.length; r++) {
 	for (let o=0; o<rows[r].outputs.length; o++) {
-	    rows[r].outputs[o].anomoly = rows[r].outputs[o].script_asm.startsWith('OP_RETURN ');
-	    if (rows[r].outputs[o].anomoly)
+	    rows[r].outputs[o].loss = rows[r].outputs[o].script_asm.startsWith('OP_RETURN ');
+	    if (rows[r].outputs[o].loss)
 		rows[r].outputs[o].description = 'The script used in this output makes it unspendable because it starts with OP_RETURN.';
 	}
     }
@@ -105,11 +105,11 @@ const upsertTransaction = async (row) => {
 	console.log('    adding output', output.index, output.value.toString(), output.script_asm);
 	await db.query(`
           INSERT INTO outputs (
-            tx_hash, anomoly, output_index, script_asm, script_hex, required_signatures,
+            tx_hash, loss, output_index, script_asm, script_hex, required_signatures,
             output_type, addresses, output_value, description
           ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
-          )`, [row.hash, output.anomoly, output.index, output.script_asm, output.script_hex,
+          )`, [row.hash, output.loss, output.index, output.script_asm, output.script_hex,
 	       output.required_signatures, output.type, output.addresses, output.value.toString(),
 	       output.description]);
     }
