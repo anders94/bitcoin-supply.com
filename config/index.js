@@ -17,6 +17,14 @@ module.exports = {
         }
     },
 
-    paginationSize: 250
+    paginationSize: 250,
+
+    bitcoinRPC: {
+	host: process.env.RPCHOST || '127.0.0.1',
+	port: process.env.RPCPORT || 8332,
+	network: process.env.RPCNETWORK || 'mainnet',
+	username: process.env.RPCUSERNAME || 'rpcuser',
+	password: process.env.RPCPASSWORD || ''
+    }
 
 }
