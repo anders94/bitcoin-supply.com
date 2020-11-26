@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS transactions (
   is_coinbase            BOOLEAN,
   input_value            BIGINT,
   output_value           BIGINT,
-  fee                    BIGINT
+  fee                    BIGINT,
+  description            TEXT,
+  attributes             JSONB      NOT NULL DEFAULT '{}'::JSONB,
 );
 
 -----------------------
@@ -31,8 +33,7 @@ CREATE TABLE IF NOT EXISTS inputs (
   input_type             TEXT,
   addresses              TEXT[],
   input_value            BIGINT,
-  description            TEXT,
-  attributes             JSONB      NOT NULL DEFAULT '{}'::JSONB
+  UNIQUE (tx_hash, input_index)
 );
 
 -----------------------
@@ -41,7 +42,7 @@ CREATE TABLE IF NOT EXISTS inputs (
 CREATE TABLE IF NOT EXISTS outputs (
   created                TIMESTAMP  NOT NULL DEFAULT now(),
   tx_hash                TEXT       NOT NULL REFERENCES transactions(tx_hash),
-  anomoly                BOOLEAN    NOT NULL DEFAULT FALSE,
+  loss                   BOOLEAN    NOT NULL DEFAULT FALSE,
   output_index           INT,
   script_asm             TEXT,
   script_hex             TEXT,
@@ -50,5 +51,6 @@ CREATE TABLE IF NOT EXISTS outputs (
   addresses              TEXT[],
   output_value	         BIGINT,
   description            TEXT,
-  attributes             JSONB      NOT NULL DEFAULT '{}'::JSONB
+  attributes             JSONB      NOT NULL DEFAULT '{}'::JSONB,
+  UNIQUE (tx_hash, output_index)
 );

@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS blocks (
   new_supply           BIGINT,
   current_total_supply BIGINT,
   blocks_till_halving  INT        NOT NULL,
-  anomoly              BOOLEAN    NOT NULL DEFAULT FALSE,
+  loss                 BOOLEAN    NOT NULL DEFAULT FALSE,
   description          TEXT,
   attributes           JSONB      NOT NULL DEFAULT '{}'::JSONB
 );
