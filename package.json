@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "@google-cloud/bigquery": "^5.4.0",
+    "@rauschma/stringio": "^1.4.0",
     "big-integer": "^1.6.48",
     "bitcoin-core": "^3.0.0",
     "cookie-parser": "~1.4.4",
