@@ -4,20 +4,58 @@ block content
   .jumbotron
     .container
       h1.display-3 Bitcoin Supply
-      table.table.table-striped
+      table.table
         tbody
           tr
-            th Current Supply:
-            td #{helpers.format(current_supply/100000000, 8)} BTC
+            th.alert-success.text-right
+              a(data-toggle='collapse', href='#currentSupplyCollapse', aria-expanded='false', aria-controls='currentSupplyCollapse') Current Supply
+            td.alert-success #{helpers.format(current_supply/100000000, 8)} BTC
+          tr#currentSupplyCollapse.collapse.alert-success
+            td(colspan=2)
+              .card.card-body
+                .card-text
+                  p The current supply of bitcoin includes all spendable bitcoin mined to date. This figure excludes all provably lost bitcoin.
+                  p Lots more text here about how this number is calculated.
           tr
-            th Total Possible Supply:
-            td #{helpers.format(total_possible_supply/100000000, 8)} BTC
+            th.alert-primary.text-right
+              a(data-toggle='collapse', href='#possibleSupplyCollapse', aria-expanded='false', aria-controls='possibleSupplyCollapse') Total Possible Supply
+            td.alert-primary #{helpers.format(total_possible_supply/100000000, 8)} BTC
+          tr#possibleSupplyCollapse.collapse.alert-primary
+            td(colspan=2)
+              .card.card-body
+                .card-text
+                  p This is the maximum possible supply if no further losses occur after all mining rewards have been distributed.
+                  p Lots more text here about how this number is calculated.
           tr
-            th Amount of Total Supply Released
-            td #{((current_supply/total_possible_supply)*100).toFixed(3)}%
+            th.alert-secondary.text-right Amount of Total Supply Released
+            td.alert-secondary #{((current_supply/total_possible_supply)*100).toFixed(3)}%
           tr
-            th Confirmed Lost *
-            td #{helpers.format(total_lost/100000000, 8)} BTC
+            th.alert-danger.text-right Lost via Miners
+            td.alert-danger
+          tr
+            th.alert-danger.text-right Unclaimed Block Rewards
+            td.alert-danger #{helpers.format(total_lost/100000000, 8)} BTC
+          tr
+            th.alert-danger.text-right Unclaimed Fees
+            td.alert-danger #{helpers.format(total_lost/100000000, 8)} BTC
+          tr
+            th.alert-danger.text-right Lost via Transactions
+            td.alert-danger
+          tr
+            th.alert-danger.text-right OP_RETURN Unspendable
+            td.alert-danger #{helpers.format(12.34567890, 8)} BTC
+          tr
+            th.alert-danger.text-right Addresses not on ECDSA Curve
+            td.alert-danger #{helpers.format(2.34567890, 8)} BTC
+          tr
+            th.alert-danger.text-right Total Premanently Lost
+            td.alert-danger #{helpers.format(102.34567890, 8)} BTC
+          tr
+            th.alert-warning.text-right Very likely Lost
+            td.alert-warning
+          tr
+            th.alert-warning.text-right Burn Addresses
+            td.alert-warning #{helpers.format(2.34567890, 8)} BTC
 
       p As of block <a href="/block/#{latest_block.block_number}">#{helpers.format(latest_block.block_number)}</a> there can only ever be #{helpers.format(total_possible_supply/100000000, 8)} bitcoin in existance.
       p * This figure only includes verifyably lost coin. A very significant amount of coin may also be irretrevable due to other factors including key loss and spends to addresses with very likely unknown private keys. These losses are impossible to quantify.
@@ -27,7 +65,7 @@ block content
   .container
     .row
       .col
-        h1 Losses
+        h1 Confirmed Losses
         table.table.table-striped
           thead
             tr

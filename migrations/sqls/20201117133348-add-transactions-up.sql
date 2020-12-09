@@ -13,7 +13,6 @@ CREATE TABLE IF NOT EXISTS transactions (
   input_value            BIGINT,
   output_value           BIGINT,
   fee                    BIGINT,
-  supply_loss            BOOLEAN,
   attributes             JSONB      NOT NULL DEFAULT '{}'::JSONB
 );
 
