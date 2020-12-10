@@ -27,10 +27,10 @@ CREATE TABLE IF NOT EXISTS blocks (
   attributes           JSONB      NOT NULL DEFAULT '{}'::JSONB
 );
 
------------------
--- table: oneoffs
------------------
-CREATE TABLE IF NOT EXISTS oneoffs (
+-------------------
+-- table: anomolies
+-------------------
+CREATE TABLE IF NOT EXISTS anomolies (
   created              TIMESTAMP  NOT NULL DEFAULT now(),
   block_number         BIGINT     NOT NULL UNIQUE,
   new_supply           BIGINT     NOT NULL,

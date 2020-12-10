@@ -1,4 +1,4 @@
-INSERT INTO oneoffs
+INSERT INTO anomolies
   (block_number, new_supply, description)
 VALUES
   (0, 0, 'The 50 BTC supply generated in the first block is not spendable because clients dont include it in the spendable supply.'),
