@@ -3,13 +3,14 @@ UTXOs with scripts beginning with `OP_RETURN` are unspendable and should be clas
 Lost*.
 
 | --------------------|-------------------|
+| Field               | Value             |
+| --------------------|-------------------|
 | Author              | Anders Brownworth |
 | Status              | Final             |
 | Created             | 2020-12-15        |
 | Category            | Provably Lost     |
 | First Seen in Block | 247,633           |
 | Scale Estimate      | 12.10237381 BTC   |
-| --------------------|-------------------|
 
 ## Abstract
 Use of transactions with `OP_RETURN` outputs is a common way to record arbitrary data in the bitcoin

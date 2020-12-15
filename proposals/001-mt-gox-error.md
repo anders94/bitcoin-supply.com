@@ -2,13 +2,14 @@
 MtGox created some manual transactions with UTXOs 
 
 |---------------------|-------------------|
+| Field               | Value             |
+|---------------------|-------------------|
 | Author              | Anders Brownworth |
 | Status              | Final             |
 | Created             | 2020-12-15        |
 | Category            | Provably Lost     |
 | First Seen in Block | 150,951           |
 | Scale Estimate      | 2609.36304319 BTC |
-|---------------------|-------------------|
 
 ## Abstract
 First publically identified by *genjix* on https://bitcointalk.org/index.php?topic=50206.0 these
