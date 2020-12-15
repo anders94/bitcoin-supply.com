@@ -2,7 +2,6 @@
 UTXOs with scripts beginning with `OP_RETURN` are unspendable and should be classified as *Provably
 Lost*.
 
-| --------------------|-------------------|
 | Field               | Value             |
 | --------------------|-------------------|
 | Author              | Anders Brownworth |
