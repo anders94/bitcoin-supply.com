@@ -1,6 +1,7 @@
 # Proposal 001 - MtGox Error
 MtGox created some manual transactions with UTXOs 
 
+|---------------------|-------------------|
 | Author              | Anders Brownworth |
 | Status              | Final             |
 | Created             | 2020-12-15        |
