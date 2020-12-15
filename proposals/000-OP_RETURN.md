@@ -22,3 +22,17 @@ These UTXOs can be identified by checking to see if `script_asm` starts with `OP
 output.script_asm.startsWith('OP_RETURN ')
 ```
 
+## Example
+Transaction `139c004f477101c468767983536caaeef568613fab9c2ed9237521f5ff530afd` has the following
+output:
+```
+    {
+      value: 0.001,
+      n: 1,
+      scriptPubKey: {
+        asm: 'OP_RETURN d68bdab455902dcc59f4e8f775a59c58ea8ae8f0a6cb7f3b96f8a3cfd84c9af7',
+        hex: '6a20d68bdab455902dcc59f4e8f775a59c58ea8ae8f0a6cb7f3b96f8a3cfd84c9af7',
+        type: 'nulldata'
+      }
+    }
+```
