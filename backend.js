@@ -4,10 +4,8 @@ const { spawn } = require('child_process');
 const { chunksToLinesAsync } = require('@rauschma/stringio');
 
 // TODO
-//   * make sure block.transactional_loss and block.supply_loss are both set properly
-//       select block_number, block_timestamp, transaction_count, input_sum, output_sum, input_sum-output_sum as delta, transactional_loss, allowed_supply, new_supply, current_total_supply, supply_loss from blocks;
+//   * make sure block.transactional_loss, block.new_supply and block.supply_loss are both set properly
 //   * actually implement anomolies table
-//   * make sure block.new_supply is correct
 
 const allowedSupply = (height) => {
     let reward = 5000000000n;   // 50 BTC
@@ -15,6 +13,61 @@ const allowedSupply = (height) => {
         reward = reward / 2n;
 
     return reward;
+}
+
+const processBlock = async (next_block, last_block) => {
+    if (last_block) {
+	console.log('YYY - db.upsertBlock', last_block);
+	await db.upsertBlock(last_block);
+	await db.commit();
+    }
+
+    next_block.input_sum = 0n;
+    next_block.output_sum = 0n,
+    next_block.fee_sum = 0n;
+    next_block.transactional_loss = 0n;
+    next_block.allowed_supply = allowedSupply(next_block.number);
+
+    await db.begin();
+    await db.upsertBlock(next_block);
+
+    return next_block;
+
+}
+
+const processTransaction = async (tx, block) => {
+    let loss_in_this_transaction = 0n;
+
+    for (let t=0; t<tx.inputs.length; t++)
+	block.input_sum += BigInt(tx.inputs[t].value);
+
+    for (let t=0; t<tx.outputs.length; t++) {
+	block.output_sum += BigInt(tx.outputs[t].value);
+	if (tx.outputs[t].value > 0) {
+	    if (detectors.outputLoss(tx.outputs[t])) {
+		tx.outputs[t].supply_loss = true;
+		loss_in_this_transaction += BigInt(tx.outputs[t].value);
+	    }
+	}
+    }
+
+    block.fee_sum += BigInt(tx.fee);
+
+    block.new_supply = block.output_sum - block.input_sum;
+    block.transactional_loss += loss_in_this_transaction;
+    block.supply_loss = loss_in_this_transaction > 0n ||
+	block.allowed_supply != block.new_supply;
+    console.log('XXX supply_loss', loss_in_this_transaction, '> 0n ||', block.allowed_supply, '!=', block.new_supply, '===>', block.supply_loss);
+
+    await db.upsertTransaction(tx);
+
+    if (loss_in_this_transaction > 0n) {
+	await db.upsertInputs(tx.hash, tx.inputs);
+	await db.upsertOutputs(tx.hash, tx.outputs);
+    }
+
+    return block;
+
 }
 
 const processReadable = async (readable) => {
@@ -28,54 +81,10 @@ const processReadable = async (readable) => {
 	try {
 	    const o = JSON.parse(line);
 
-	    if (o.type == 'block') {
-		if (current_block) {
-		    await db.upsertBlock(current_block);
-		    await db.commit();
-		}
-
-		current_block = o;
-
-		current_block.input_sum = 0n;
-		current_block.output_sum = 0n,
-		current_block.fee_sum = 0n;
-		current_block.transactional_loss = 0n;
-		current_block.allowed_supply = allowedSupply(o.number)
-
-		await db.begin();
-		await db.upsertBlock(current_block);
-
-	    }
-	    else if (o.type == 'transaction') {
-		current_block.input_sum = 0n;
-		for (let i=0; i<o.inputs.length; i++)
-		    current_block.input_sum += BigInt(o.inputs[i].value);
-
-		let loss_in_this_transaction = 0n;
-		current_block.output_sum = 0n;
-		for (let i=0; i<o.outputs.length; i++) {
-		    current_block.output_sum += BigInt(o.outputs[i].value);
-		    if (o.outputs[i].value > 0) {
-			if (detectors.outputLoss(o.outputs[i])) {
-			    o.outputs[i].supply_loss = true;
-			    loss_in_this_transaction += BigInt(o.outputs[i].value);
-			}
-		    }
-		}
-		current_block.fee_sum += BigInt(o.fee);
-		current_block.supply_loss = loss_in_this_transaction == 0n ||
-		    current_block.input_sum - current_block.output_sum == 0;
-		current_block.new_supply = current_block.input_sum - current_block.output_sum;
-		current_block.transactional_loss += loss_in_this_transaction;
-
-		await db.upsertTransaction(o);
-		if (loss_in_this_transaction) {
-		    await db.upsertInputs(tx.hash, tx.inputs);
-		    await db.upsertOutputs(tx.hash, tx.outputs);
-		}
-
-
-	    }
+	    if (o.type == 'block')
+		current_block = await processBlock(o, current_block);
+	    else if (o.type == 'transaction')
+		current_block = await processTransaction(o, current_block);
 
 	}
 	catch (e) {
@@ -98,17 +107,12 @@ const launchBitcoinETL = async (startblock) => {
 
 }
 
-const sleep = async (ms) => {
-  return new Promise(resolve => setTimeout(resolve, ms));
-
-}
-
 const main = async () => {
     await db.connect();
 
     //const start_block = await getLatestBlock() + 1;
-    const start_block = 124724; // Miner block loss
-    //const start_block = 640862; // OP_RETURN tx loss
+    //const start_block = 124724; // Miner block loss
+    const start_block = 640862; // OP_RETURN tx loss
     //const start_block = 150951; // MtGox tx loss
 
     console.log('starting at block number', start_block);
