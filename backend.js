@@ -4,7 +4,6 @@ const { spawn } = require('child_process');
 const { chunksToLinesAsync } = require('@rauschma/stringio');
 
 // TODO
-//   * make sure block.transactional_loss, block.new_supply and block.supply_loss are both set properly
 //   * actually implement anomolies table
 
 const allowedSupply = (height) => {
@@ -17,7 +16,6 @@ const allowedSupply = (height) => {
 
 const processBlock = async (next_block, last_block) => {
     if (last_block) {
-	console.log('YYY - db.upsertBlock', last_block);
 	await db.upsertBlock(last_block);
 	await db.commit();
     }
@@ -42,12 +40,13 @@ const processTransaction = async (tx, block) => {
 	block.input_sum += BigInt(tx.inputs[t].value);
 
     for (let t=0; t<tx.outputs.length; t++) {
-	block.output_sum += BigInt(tx.outputs[t].value);
 	if (tx.outputs[t].value > 0) {
 	    if (detectors.outputLoss(tx.outputs[t])) {
 		tx.outputs[t].supply_loss = true;
 		loss_in_this_transaction += BigInt(tx.outputs[t].value);
 	    }
+	    else
+		block.output_sum += BigInt(tx.outputs[t].value);
 	}
     }
 
@@ -57,7 +56,6 @@ const processTransaction = async (tx, block) => {
     block.transactional_loss += loss_in_this_transaction;
     block.supply_loss = loss_in_this_transaction > 0n ||
 	block.allowed_supply != block.new_supply;
-    console.log('XXX supply_loss', loss_in_this_transaction, '> 0n ||', block.allowed_supply, '!=', block.new_supply, '===>', block.supply_loss);
 
     await db.upsertTransaction(tx);
 
@@ -110,9 +108,9 @@ const launchBitcoinETL = async (startblock) => {
 const main = async () => {
     await db.connect();
 
-    //const start_block = await getLatestBlock() + 1;
+    const start_block = await db.getLatestBlock() + 1;
     //const start_block = 124724; // Miner block loss
-    const start_block = 640862; // OP_RETURN tx loss
+    //const start_block = 640862; // OP_RETURN tx loss
     //const start_block = 150951; // MtGox tx loss
 
     console.log('starting at block number', start_block);

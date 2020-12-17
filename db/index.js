@@ -42,6 +42,7 @@ module.exports = {
 
     upsertBlock: async (block) => {
 	console.log('upsert block', block.number, new Date(block.timestamp * 1000));
+
 	await client.query(
             `INSERT INTO blocks
                (block_hash, block_size, stripped_size, weight, block_number,
