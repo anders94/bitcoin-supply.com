@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const { chunksToLinesAsync } = require('@rauschma/stringio');
 
 // TODO
-//   * actually implement anomolies table
+//   * actually implement anomolies table (or should we instead do this in the detectors?)
 
 const allowedSupply = (height) => {
     let reward = 5000000000n;   // 50 BTC
