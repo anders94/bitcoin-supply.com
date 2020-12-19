@@ -1,4 +1,4 @@
-# Proposal 000 - OP_RETURN
+# Proposal 004 - OP_RETURN
 UTXOs with scripts beginning with `OP_RETURN` are unspendable and should be classified as *Provably
 Lost*.
 
@@ -6,7 +6,7 @@ Lost*.
 | --------------------|-------------------|
 | Author              | Anders Brownworth |
 | Status              | Final             |
-| Created             | 2020-12-15        |
+| Created             | 2020-12-18        |
 | Category            | Provably Lost     |
 | First Seen in Block | 247,633           |
 | Scale Estimate      | 12.10237381 BTC   |

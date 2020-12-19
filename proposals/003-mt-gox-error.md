@@ -1,11 +1,11 @@
-# Proposal 001 - MtGox Error
+# Proposal 003 - MtGox Error
 MtGox created some manual transactions with UTXOs 
 
 | Field               | Value              |
 |---------------------|--------------------|
 | Author              | Anders Brownworth  |
 | Status              | Final              |
-| Created             | 2020-12-15         |
+| Created             | 2020-12-18         |
 | Category            | Provably Lost      |
 | First Seen in Block | 150,951            |
 | Scale Estimate      | 2,609.36304319 BTC |

@@ -1,4 +1,4 @@
-# Proposal 000 - Miner Loss
+# Proposal 002 - Miner Loss
 Coinbase transactions where the miner doesn't claim some or all of the available new coin
 issuance and fees represents *Provably Lost* coin.
 
@@ -6,7 +6,7 @@ issuance and fees represents *Provably Lost* coin.
 | --------------------|-------------------|
 | Author              | Anders Brownworth |
 | Status              | Final             |
-| Created             | 2020-12-15        |
+| Created             | 2020-12-18        |
 | Category            | Provably Lost     |
 | First Seen in Block | 124,724           |
 | Scale Estimate      | xxxxxxxxxxx BTC   |
