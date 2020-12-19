@@ -4,6 +4,15 @@ This is the codebase behind the bitcoin-supply.com website which shows how the
 supply calculations are reached and serves as a platform for proposals and
 debate about changes to these calculations.
 
+## Contributions
+
+Additions and changes to what constitutes *provably lost*, *likely lost* and
+other classifications of the supply are done in the [proposals/](proposals/)
+tree. Submit a PR with your proposal file in markdown format and discussion
+will happen in comments related to the PR. Once proposals reach finality, they
+get implemented in the [detectors/](detectors/) and become part of the
+production environment.
+
 ## Getting Started
 
 These instructions will get the project up and running on your system.
@@ -58,11 +67,11 @@ db-migrate down
 ```
 
 ## Running
-Running a complete system requires running both the website and the backend pricess
-which updates the database as new blocks come in.
+A complete system requires running both the website and the backend process which
+updates the database as new blocks come in.
 
-Sync the database from a large BigQuery download: (takes a long time but far quicker
-than using RPC on a full node)
+Sync the database from a large BigQuery download: (costly but far quicker than using
+RPC on a full node)
 
 ```
 node backend-bigquery
