@@ -32,14 +32,6 @@ module.exports = {
             return -1;
     },
 
-    getAnomolies: async () => {
-	const res = await client.query(
-            `SELECT *
-             FROM anomolies`);
-
-	return res.rows;
-    },
-
     upsertBlock: async (block) => {
 	console.log('upsert block', block.number, new Date(block.timestamp * 1000));
 

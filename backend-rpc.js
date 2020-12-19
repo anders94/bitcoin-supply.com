@@ -3,9 +3,6 @@ const detectors = require('./detectors');
 const { spawn } = require('child_process');
 const { chunksToLinesAsync } = require('@rauschma/stringio');
 
-// TODO
-//   * actually implement anomolies table (or should we instead do this in the detectors?)
-
 const allowedSupply = (height) => {
     let reward = 5000000000n;   // 50 BTC
     for (let x=1; x<(BigInt(height) / 210000n) + 1n; x++)
@@ -41,7 +38,7 @@ const processTransaction = async (tx, block) => {
 
     for (let t=0; t<tx.outputs.length; t++) {
 	if (tx.outputs[t].value > 0) {
-	    if (detectors.outputLoss(tx.outputs[t])) {
+	    if (detectors.outputLoss(block, tx, tx.outputs[t])) {
 		tx.outputs[t].supply_loss = true;
 		loss_in_this_transaction += BigInt(tx.outputs[t].value);
 	    }
@@ -69,7 +66,6 @@ const processTransaction = async (tx, block) => {
 }
 
 const processReadable = async (readable) => {
-    const anomolies = await db.getAnomolies();
     let current_block;
 
     await db.begin();
