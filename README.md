@@ -10,7 +10,7 @@ Additions and changes to what constitutes *provably lost*, *likely lost* and
 other classifications of the supply are done in the [proposals/](proposals/)
 tree. Submit a PR with your proposal file in markdown format and discussion
 will happen in comments related to the PR. Once proposals reach finality, they
-get implemented in the [detectors/](detectors/) and become part of the
+get implemented in the [detectors/](detectors/index.js) and become part of the
 production environment.
 
 ## Getting Started
