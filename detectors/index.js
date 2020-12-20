@@ -1,6 +1,6 @@
 module.exports = {
     blockLoss: (block) => {
-	// Proposal 002 - Miner Loss (TODO)
+	// Proposal 002 - Miner Loss
         if (block.allowed_supply != block.new_supply)
 	    return true;
 	else
