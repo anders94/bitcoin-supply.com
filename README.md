@@ -13,9 +13,15 @@ will happen in comments related to the PR. Once proposals reach finality, they
 get implemented in the [detectors/](detectors/index.js) and become part of the
 production environment.
 
-## Getting Started
+## Layout
 
-These instructions will get the project up and running on your system.
+There are three significant parts of this codebase:
+* [Proposals](proposals/) and the [logic](detectors/index.js) that implements them
+* A [backend](backend-rpc.js) script that uses a bitcoin full node to keep the database up to date
+* A [website](routes/index.js) that exposes the data in the database
+
+The following instructions will get the backend and web projects up and running
+on your system.
 
 ### Prerequisites
 
@@ -90,11 +96,6 @@ node bin/www
 ```
 
 Point your web browser to `http://localhost:3000`.
-
-## Contributing
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct, and
-the process for submitting pull requests to us.
 
 ## Authors
 
