@@ -1,5 +1,6 @@
 # Proposal 003 - MtGox Error
-MtGox created some manual transactions with UTXOs 
+MtGox created some manual transactions with UTXOs that are unspendable. Even though these are
+in the spendable set, the conditions to spend them are impossible.
 
 | Field               | Value              |
 |---------------------|--------------------|
@@ -13,7 +14,8 @@ MtGox created some manual transactions with UTXOs
 ## Abstract
 First publically identified by *genjix* on https://bitcointalk.org/index.php?topic=50206.0 these
 UTXOs have a standard transaction script but with the flaw that they fail to push the public key
-onto the stack. Therefore, all of these outputs are permanently lost.
+onto the stack. Because there is no public key, no signature will satisfy these transactions.
+Therefore, all of these outputs are permanently lost.
 
 ## Implementation
 These UTXOs can be identified by checking to see if `script_asm` is `76a90088ac`:

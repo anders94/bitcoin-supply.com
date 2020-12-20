@@ -14,7 +14,7 @@ by the bitcoin software and is therefore *provably lost*.
 ## Abstract
 Bitcoin's source code excludes the coinbase transaction in block 0 from the spendable outputs.
 It is unclear if this was deliberatly done but at this point is considered highly unlikely to
-be reversed so this coin is considered provably lost.
+be reversed.
 
 ```
 if (block.block_number == 0)

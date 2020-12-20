@@ -1,6 +1,5 @@
 # Proposal 004 - OP_RETURN
-UTXOs with scripts beginning with `OP_RETURN` are unspendable and should be classified as *Provably
-Lost*.
+UTXOs with scripts beginning with `OP_RETURN` are unspendable and are classified as *Provably Lost*.
 
 | Field               | Value             |
 | --------------------|-------------------|
@@ -13,8 +12,8 @@ Lost*.
 
 ## Abstract
 Use of transactions with `OP_RETURN` outputs is a common way to record arbitrary data in the bitcoin
-blockchain. While these outputs usually have a value of '0', some consume positive amounts. These
-UTXOs are unspendable by nature and therefore represent supply loss.
+blockchain. While these outputs usually have a value of '0', some consume positive amounts and are
+by nature unspendable so represent provably lost supply.
 
 ## Implementation
 These UTXOs can be identified by checking to see if `script_asm` starts with `OP_RETURN `:
