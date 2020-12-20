@@ -13,6 +13,8 @@ const allowedSupply = (height) => {
 
 const processBlock = async (next_block, last_block) => {
     if (last_block) {
+	last_block.supply_loss = last_block.transactional_loss > 0n || detectors.blockLoss(last_block);
+
 	await db.upsertBlock(last_block);
 	await db.commit();
     }
@@ -51,8 +53,6 @@ const processTransaction = async (tx, block) => {
 
     block.new_supply = block.output_sum - block.input_sum;
     block.transactional_loss += loss_in_this_transaction;
-    block.supply_loss = loss_in_this_transaction > 0n ||
-	block.allowed_supply != block.new_supply;
 
     await db.upsertTransaction(tx);
 

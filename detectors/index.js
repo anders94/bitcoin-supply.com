@@ -1,7 +1,10 @@
 module.exports = {
     blockLoss: (block) => {
 	// Proposal 002 - Miner Loss (TODO)
-	return false;
+        if (block.allowed_supply != block.new_supply)
+	    return true;
+	else
+	    return false;
     },
     outputLoss: (block, transaction, output) => {
 	// Proposal 000 - Block 0 Coinbase
