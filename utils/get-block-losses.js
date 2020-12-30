@@ -1,21 +1,12 @@
 const db = require('../db');
 const config = require('../config');
 const bigInt = require('big-integer');
-const {BigQuery} = require('@google-cloud/bigquery');
+const { BigQuery } = require('@google-cloud/bigquery');
 
 process.env.GOOGLE_APPLICATION_CREDENTIALS = '../env/google-cloud-creds.json';
 
 const bigquery = new BigQuery();
 const main = async () => {
-    const oneoffsRes = await db.query(
-        `SELECT *
-         FROM oneoffs
-         ORDER BY block_number ASC`);
-
-    let oneoffs = {};
-    for (let r=0; r<oneoffsRes.rows.length; r++)
-        oneoffs[oneoffsRes.rows[r].block_number] = oneoffsRes.rows[r];
-
     const heightRes = await db.query(
         `SELECT block_number
          FROM blocks
@@ -57,11 +48,6 @@ const main = async () => {
 	const blocks_till_halving = 210000 - (row.block_number % 210000);
 	row.loss = (row.allowed_supply != row.new_supply);
 	row.description = '';
-	if (oneoffs[row.block_number]) {
-	    row.loss = true;
-	    row.new_supply = oneoffs[row.block_number].new_supply;
-	    row.description = oneoffs[row.block_number].description;
-	}
 	const supplyRes = await db.query(
           `SELECT current_total_supply
            FROM blocks

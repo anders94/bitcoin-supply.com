@@ -1,0 +1,6 @@
+export BITCOINETL_BITCOIN_PROVIDER_URI=http://bitcoin-supply:6f5b6a90aaca576537350ec080d9f1c7@nuc.internal.andrs.dev:8332
+
+bitcoinetl export_blocks_and_transactions --start-block 0 --end-block 50 --chain bitcoin --blocks-output blocks.json --transactions-output transactions.json
+
+https://github.com/blockchain-etl/bitcoin-etl#stream
+bitcoinetl stream --start-block 0 --chain bitcoin --lag 6
