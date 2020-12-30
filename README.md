@@ -1,8 +1,17 @@
 # bitcoin-supply.com
 
-This is the codebase behind the bitcoin-supply.com website which shows how the
+This is the codebase behind the bitcoin-supply.com website. It shows how the
 supply calculations are reached and serves as a platform for proposals and
-debate about changes to these calculations.
+debate about changes to these calculations. Primarily, this site tracks *provably
+lost* coin although we will be adding other grades in the future.
+
+*Provably lost* comprises coin that has been made impossible to spend and coin
+lost by miners not collecting all available fees and new supply. Generally,
+existing coin can be lost in transactions that require something impossible
+to be true (such as 1 + 1 = 3) in order to be spent. Existing coin can also
+be lost in fees that miners fail to collect. Miners can also fail to collect
+some or all of the new coin available in a block. All of these cases result
+in *provably lost* coin.
 
 ## Contributions
 
