@@ -1,3 +1,4 @@
+const fs = require('fs');
 const db = require('./db');
 const config = require('./config');
 const detectors = require('./detectors');
@@ -55,9 +56,8 @@ const processTransaction = async (tx, block) => {
     block.new_supply = block.output_sum - block.input_sum;
     block.transactional_loss += loss_in_this_transaction;
 
-    await db.upsertTransaction(tx);
-
     if (loss_in_this_transaction > 0n) {
+	await db.upsertTransaction(tx);
 	await db.upsertInputs(tx.hash, tx.inputs);
 	await db.upsertOutputs(tx.hash, tx.outputs);
     }
@@ -92,6 +92,9 @@ const processReadable = async (readable) => {
 
 const launchBitcoinETL = async (startblock) => {
     const providerUri = `http://${config.bitcoinRPC.username}:${config.bitcoinRPC.password}@${config.bitcoinRPC.host}:${config.bitcoinRPC.port}`;
+
+    fs.unlinkSync('last_synced_block.txt');
+
     const bitcoinetl = spawn('bitcoinetl', [
 	'stream', '--chain', 'bitcoin',
 	'--start-block', startblock,

@@ -10,7 +10,7 @@
     "dev": {
 	"driver": "pg",
 	"user": "bitcoin-supply",
-	"password": "SuperSecretPassword",
+	"password": { "ENV": "PGPASSWORD" },
 	"host": "localhost",
 	"database": "bitcoin-supply_dev"
     },
