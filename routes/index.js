@@ -13,14 +13,14 @@ router.get('/', async (req, res, next) => {
          FROM blocks`);
 
     const total_lost = await db.query(
-	`SELECT SUM(allowed_supply) - SUM(new_supply) AS lost
+	`SELECT COALESCE(SUM(allowed_supply), 0) - COALESCE(SUM(new_supply), 0) AS lost
          FROM blocks
-         WHERE loss = true`);
+         WHERE supply_loss = true`);
 
     const losses = await db.query(
         `SELECT *
          FROM blocks
-         WHERE loss = true
+         WHERE supply_loss = true
          ORDER BY block_number ASC
          LIMIT 50`);
 
@@ -157,4 +157,5 @@ router.get('/block/:block_number', [check('block_number', 'Sorry, a block\'s ID 
     }
 });
 
+db.connect(); // TODO: actually await this
 module.exports = router;
