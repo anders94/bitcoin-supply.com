@@ -1,4 +1,5 @@
 const db = require('./db');
+const config = require('./config');
 const detectors = require('./detectors');
 const { spawn } = require('child_process');
 const { chunksToLinesAsync } = require('@rauschma/stringio');
@@ -90,11 +91,12 @@ const processReadable = async (readable) => {
 }
 
 const launchBitcoinETL = async (startblock) => {
+    const providerUri = `http://${config.bitcoinRPC.username}:${config.bitcoinRPC.password}@${config.bitcoinRPC.host}:${config.bitcoinRPC.port}`;
     const bitcoinetl = spawn('bitcoinetl', [
 	'stream', '--chain', 'bitcoin',
 	'--start-block', startblock,
 	'--block-batch-size', 1, // we depend on getting one block's transactions at a time in the stream
-	'--provider-uri', 'http://bitcoin-supply:6f5b6a90aaca576537350ec080d9f1c7@box.internal.andrs.dev:8332'
+	'--provider-uri', providerURI
     ], { stdio: ['ignore', 'pipe', process.stderr]} );
 
     await processReadable(bitcoinetl.stdout);

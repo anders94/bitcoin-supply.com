@@ -3,7 +3,7 @@ module.exports = {
 	host: process.env.PGHOST || 'localhost',
 	database: process.env.PGDATABASE || 'bitcoin-supply_dev',
 	user: process.env.PGUSER || 'bitcoin-supply',
-	password: process.env.PGPASSWORD || '',
+	password: process.env.PGPASSWORD || 'supersecretpassword',
 	ssl: false,
 	debug: false
     },
@@ -24,7 +24,7 @@ module.exports = {
 	port: process.env.RPCPORT || 8332,
 	network: process.env.RPCNETWORK || 'mainnet',
 	username: process.env.RPCUSERNAME || 'rpcuser',
-	password: process.env.RPCPASSWORD || ''
+	password: process.env.RPCPASSWORD || 'supersecretpassword'
     }
 
 }
