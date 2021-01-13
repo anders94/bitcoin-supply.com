@@ -91,9 +91,13 @@ const processReadable = async (readable) => {
 }
 
 const launchBitcoinETL = async (startblock) => {
-    const providerUri = `http://${config.bitcoinRPC.username}:${config.bitcoinRPC.password}@${config.bitcoinRPC.host}:${config.bitcoinRPC.port}`;
+    const providerURI = `http://${config.bitcoinRPC.username}:${config.bitcoinRPC.password}@${config.bitcoinRPC.host}:${config.bitcoinRPC.port}`;
 
-    fs.unlinkSync('last_synced_block.txt');
+    try {
+	fs.unlinkSync('last_synced_block.txt');
+    }
+    catch (e) {
+    }
 
     const bitcoinetl = spawn('bitcoinetl', [
 	'stream', '--chain', 'bitcoin',
