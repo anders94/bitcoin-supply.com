@@ -1,4 +1,3 @@
-DROP TABLE anomolies;
 DROP TABLE outputs;
 DROP TABLE inputs;
 DROP TABLE transactions;
