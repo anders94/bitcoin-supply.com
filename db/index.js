@@ -32,7 +32,22 @@ module.exports = {
             return -1;
     },
 
+    getBlock: async (block_number) => {
+	const res = await client.query(
+            `SELECT *
+             FROM blocks
+             WHERE block_number = $1`, [block_number]);
+
+        return res.rows[0];
+    },
+
     upsertBlock: async (block) => {
+	// regularize
+	block.hash = block.block_hash ? block.block_hash : block.hash;
+	block.size = block.block_size ? block.block_size : block.size;
+	block.number = block.block_number ? block.block_number : block.number;
+	block.timestamp = block.block_timestamp ? block.block_timestamp : block.timestamp;
+	
 	console.log('upsert block', block.number, new Date(block.timestamp * 1000));
 
 	await client.query(
@@ -59,10 +74,25 @@ module.exports = {
 	     block.supply_loss ? true : false, block.attributes ? block.attributes : {}]);
     },
 
+    getInputs: async (tx_hash) => {
+	const res = await client.query(
+            `SELECT *
+             FROM inputs
+             WHERE tx_hash = $1`, [tx_hash]);
+
+        return res.rows;
+    },
+
     upsertInputs: async (txhash, inputs) => {
 	console.log('    upsertInputs(', txhash, ',', inputs.length);
 	for (let i=0; i<inputs.length; i++) {
-            const input = inputs[i];
+            let input = inputs[i];
+
+	    // regularize
+	    input.index = input.input_index ? input.input_index : input.index;
+	    input.sequence = input.input_sequence ? input.input_sequence : input.sequence;
+	    input.type = input.input_type ? input.input_type : input.type;
+	    input.value = input.input_value ? input.input_value : input.value;
 
 	    console.log('      add input', txhash, input.index);
             await client.query(
@@ -86,10 +116,24 @@ module.exports = {
 	}
     },
 
+    getOutputs: async (tx_hash) => {
+	const res = await client.query(
+            `SELECT *
+             FROM outputs
+             WHERE tx_hash = $1`, [tx_hash]);
+
+        return res.rows;
+    },
+
     upsertOutputs: async (txhash, outputs) => {
 	console.log('    upsertOutputs(', txhash, ',', outputs.length);
 	for (let o=0; o<outputs.length; o++) {
-            const output = outputs[o];
+            let output = outputs[o];
+
+	    // regularize
+	    output.index = output.output_index ? output.output_index : output.index;
+	    output.type = output.output_type ? output.output_type : output.type;
+	    output.value = output.output_value ? output.output_value : output.value;
 
 	    console.log('      add output', txhash, output.index);
             await client.query(
@@ -114,7 +158,20 @@ module.exports = {
 	}
     },
 
+    getTransaction: async (tx_hash) => {
+	const res = await client.query(
+            `SELECT *
+             FROM transactions
+             WHERE tx_hash = $1`, [tx_hash]);
+
+        return res.rows[0];
+    },
+
     upsertTransaction: async (tx) => {
+	// regularize
+	tx.hash = tx.tx_hash ? tx.tx_hash : tx.hash;
+	tx.size = tx.tx_size ? tx.tx_size : tx.size;
+
 	console.log('  upsert transaction', tx.hash);
 	await client.query(
             `INSERT INTO transactions
