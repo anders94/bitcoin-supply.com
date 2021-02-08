@@ -46,8 +46,8 @@ module.exports = {
 	block.hash = block.block_hash ? block.block_hash : block.hash;
 	block.size = block.block_size ? block.block_size : block.size;
 	block.number = block.block_number ? block.block_number : block.number;
-	block.timestamp = block.block_timestamp ? block.block_timestamp : block.timestamp;
-	
+	block.timestamp = block.block_timestamp ? block.block_timestamp.getTime() / 1000 : block.timestamp;
+
 	console.log('upsert block', block.number, new Date(block.timestamp * 1000));
 
 	await client.query(
