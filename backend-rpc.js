@@ -13,24 +13,30 @@ const allowedSupply = (height) => {
     return reward;
 }
 
-const processBlock = async (next_block, last_block) => {
-    if (last_block) {
-	last_block.supply_loss = last_block.transactional_loss > 0n || detectors.blockLoss(last_block);
+const processBlock = async (new_block, current_block) => {
+    if (current_block) {
+	current_block.supply_loss = current_block.transactional_loss > 0n || detectors.blockLoss(current_block);
+	if (current_block.number > 0) {
+	    const previous_block = await db.getBlock(current_block.number - 1);
+	    current_block.current_total_supply = previous_block.current_total_supply + BigInt(current_block.new_supply);
+	}
+	else
+	    current_block.current_total_supply = BigInt(current_block.new_supply);
 
-	await db.upsertBlock(last_block);
+	await db.upsertBlock(current_block);
 	await db.commit();
     }
 
-    next_block.input_sum = 0n;
-    next_block.output_sum = 0n,
-    next_block.fee_sum = 0n;
-    next_block.transactional_loss = 0n;
-    next_block.allowed_supply = allowedSupply(next_block.number);
+    new_block.input_sum = 0n;
+    new_block.output_sum = 0n,
+    new_block.fee_sum = 0n;
+    new_block.transactional_loss = 0n;
+    new_block.allowed_supply = allowedSupply(new_block.number);
 
     await db.begin();
-    await db.upsertBlock(next_block);
+    await db.upsertBlock(new_block);
 
-    return next_block;
+    return new_block;
 
 }
 
