@@ -18,7 +18,7 @@ const processBlock = async (new_block, current_block) => {
 	current_block.supply_loss = current_block.transactional_loss > 0n || detectors.blockLoss(current_block);
 	if (current_block.number > 0) {
 	    const previous_block = await db.getBlock(current_block.number - 1);
-	    current_block.current_total_supply = previous_block.current_total_supply + BigInt(current_block.new_supply);
+	    current_block.current_total_supply = BigInt(previous_block.current_total_supply) + BigInt(current_block.new_supply);
 	}
 	else
 	    current_block.current_total_supply = BigInt(current_block.new_supply);
