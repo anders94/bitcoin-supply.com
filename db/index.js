@@ -84,7 +84,7 @@ module.exports = {
     },
 
     upsertInputs: async (txhash, inputs) => {
-	console.log('    upsertInputs(', txhash, ',', inputs.length);
+	console.log('    upsertInputs(', txhash, ',', inputs.length, ')');
 	for (let i=0; i<inputs.length; i++) {
             let input = inputs[i];
 
@@ -126,7 +126,7 @@ module.exports = {
     },
 
     upsertOutputs: async (txhash, outputs) => {
-	console.log('    upsertOutputs(', txhash, ',', outputs.length);
+	console.log('    upsertOutputs(', txhash, ',', outputs.length, ')');
 	for (let o=0; o<outputs.length; o++) {
             let output = outputs[o];
 
@@ -172,7 +172,7 @@ module.exports = {
 	tx.hash = tx.tx_hash ? tx.tx_hash : tx.hash;
 	tx.size = tx.tx_size ? tx.tx_size : tx.size;
 
-	console.log('  upsert transaction', tx.hash);
+	console.log('  upsertTransaction(', tx.hash, ')');
 	await client.query(
             `INSERT INTO transactions
                (block_number, tx_hash, tx_size, virtual_size,
