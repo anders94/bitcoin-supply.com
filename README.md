@@ -3,15 +3,19 @@
 This is the codebase behind the bitcoin-supply.com website. It shows how the
 supply calculations are reached and serves as a platform for proposals and
 debate about changes to these calculations. Primarily, this site tracks *provably
-lost* coin although we will be adding other grades in the future.
+lost* coin although *likely lost* and other classifications are possible.
 
-*Provably lost* comprises coin that has been made impossible to spend and coin
-lost by miners not collecting all available fees and new supply. Generally,
-existing coin can be lost in transactions that require something impossible
-to be true (such as 1 + 1 = 3) in order to be spent. Existing coin can also
-be lost in fees that miners fail to collect. Miners can also fail to collect
-some or all of the new coin available in a block. All of these cases result
-in *provably lost* coin.
+Coin can be *provably lost* by users issuing transactions which require an
+impossible condition for re-spend. (akin to requiring 1 + 1 = 3 before a coin
+can be spent again) Coins can also be *provably lost* by miners not accepting
+the expected new supply in a block (not accepting the block reward) or by not
+collecting the existing coins which are available to the miners as fees for
+the transactions in blocks.
+
+Coin classified as *likely lost*, as its name would imply, is a more subjective
+label. This include coins that are likely unspendable due to the loss of
+private keys. While this type of loss can never be proven, it is still a useful
+estimation.
 
 ## Contributions
 
@@ -25,9 +29,9 @@ production environment.
 ## Layout
 
 There are three significant parts of this codebase:
-* [Proposals](proposals/) and the [logic](detectors/index.js) that implements them
-* A [backend](backend-rpc.js) script that uses a bitcoin full node to keep the database up to date
-* A [website](routes/index.js) that exposes the data in the database
+* [Proposals](proposals/) and the [logic](detectors/index.js) which implements them
+* A [backend](backend-etl.js) script that uses a bitcoin full node to keep the database up to date
+* A [website](routes/index.js) which exposes the data in the database
 
 The following instructions will get the backend and web projects up and running
 on your system.
@@ -36,7 +40,7 @@ on your system.
 
 * Node.js
 * PostgreSQL
-* Indexed Bitcoin Full Node (with RPC configured)
+* Indexed Bitcoin Full Node (with RPC configured and the `-txindex` flag)
 * (optional) Google BigQuery account with JSON credential file
 * bitcoin-etl (python based - `pip install bitcoin-etl`)
 
