@@ -50,9 +50,16 @@ Clone the repo:
 
 ```
 git clone https://github.com/anders94/bitcoin-supply.com.git
+cd bitcoin-supply.com/
 ```
 
-Enter the directory and install modules:
+Optionally, clone the large SQL files used in backfill:
+
+```
+git lfs fetch --all
+```
+
+Install modules:
 
 ```
 cd bitcoin-supply.com/
