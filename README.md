@@ -38,6 +38,8 @@ on your system.
 
 ### Prerequisites
 
+* git
+* (optional) git-lfs
 * Node.js
 * PostgreSQL
 * Indexed Bitcoin Full Node (with RPC configured and the `-txindex` flag)
@@ -53,10 +55,10 @@ git clone https://github.com/anders94/bitcoin-supply.com.git
 cd bitcoin-supply.com/
 ```
 
-Optionally, clone the large SQL files used in backfill:
+Optionally, pull the large SQL files used in backfill: (these are stored in LFS because they are hundreds of megabytes)
 
 ```
-git lfs fetch --all
+git lfs pull
 ```
 
 Install modules:
