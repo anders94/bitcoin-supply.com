@@ -53,16 +53,16 @@ router.get('/losses/:page', [check('page', 'Sorry, the page number must be a pos
 	const losses = await db.query(
             `SELECT *
              FROM blocks
-             WHERE loss = true
+             WHERE supply_loss = true
              ORDER BY block_number ASC
              LIMIT $1
              OFFSET $2`,
-	    [config.paginationSize, config.paginationSize*page]);
+	    [config.paginationSize, Number(config.paginationSize) * Number(page)]);
 
 	const totalRes = await db.query(
             `SELECT COUNT(*) AS total
              FROM blocks
-             WHERE loss = true`);
+             WHERE supply_loss = true`);
 
 	return res.render('losses', {
 	    title: 'Losses | Bitcoin Supply',
