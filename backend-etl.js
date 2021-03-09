@@ -119,10 +119,13 @@ const launchBitcoinETL = async (startblock) => {
 const main = async () => {
     await db.connect();
 
-    const start_block = await db.getLatestBlock() + 1;
-    //const start_block = 124724; // Miner block loss
-    //const start_block = 640862; // OP_RETURN tx loss
-    //const start_block = 150951; // MtGox tx loss
+    let start_block = process.argv[2];
+    if (!start_block)
+	start_block = await db.getLatestBlock() + 1;
+
+    //start_block = 124724; // Miner block loss
+    //start_block = 640862; // OP_RETURN tx loss
+    //start_block = 150951; // MtGox tx loss
 
     console.log('starting at block number', start_block);
     launchBitcoinETL(start_block);
