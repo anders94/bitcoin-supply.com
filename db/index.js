@@ -94,7 +94,7 @@ module.exports = {
 	    input.type = input.input_type ? input.input_type : input.type;
 	    input.value = input.input_value ? input.input_value : input.value;
 
-	    console.log('      add input', txhash, input.index);
+	    console.log('      add input', txhash, input.index, input.value);
             await client.query(
 		`DELETE
                  FROM inputs
@@ -135,7 +135,7 @@ module.exports = {
 	    output.type = output.output_type ? output.output_type : output.type;
 	    output.value = output.output_value ? output.output_value : output.value;
 
-	    console.log('      add output', txhash, output.index);
+	    console.log('      add output', txhash, output.index, output.value);
             await client.query(
 		`DELETE
                  FROM outputs
