@@ -10,7 +10,7 @@ impossible condition for re-spend. (akin to requiring 1 + 1 = 3 before a coin
 can be spent again) Coins can also be *provably lost* by miners not accepting
 the expected new supply in a block (not accepting the block reward) or by not
 collecting the existing coins which are available to the miners as fees for
-the transactions in blocks.
+the transactions in a block.
 
 Coin classified as *likely lost*, as its name would imply, is a more subjective
 label. This include coins that are likely unspendable due to the loss of
