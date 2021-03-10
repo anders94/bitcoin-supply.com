@@ -4,6 +4,10 @@ body {
     padding-top: 20px;
 }
 
+.container {
+    padding-top: 60px;
+}
+
 .footer > .container {
     padding-right: 15px;
     padding-left: 15px;

@@ -3,7 +3,6 @@ extends layout
 block content
   .jumbotron
     .container
-      h1.display-4 Summary
       .row
         .col
           .card
@@ -13,10 +12,10 @@ block content
             .card-body
               h4 #{helpers.format(latest_block.current_total_supply/100000000, 8)} BTC
               p Current Supply Released
-              h4 #{helpers.format(total_lost/100000000, 8)} BTC
-              p Permanently Lost
               h4 #{((latest_block.current_total_supply/total_possible_supply)*100).toFixed(3)}%
               p Amount of Supply Currently Released
+              h4 #{helpers.format(total_lost/100000000, 8)} BTC
+              p Permanently Lost
         .col
           .card
             .card-header
@@ -27,28 +26,6 @@ block content
               li.list-group-item New Supply This Block: #{helpers.format(latest_block.allowed_supply/100000000, 8)} BTC
               li.list-group-item Fees Paid to Miner: #{helpers.format(latest_block.fee_sum/100000000, 8)} BTC
               li.list-group-item.list-group-item-success Loss in This Block: #{helpers.format(latest_block.transactional_loss/100000000, 8)} BTC
-
-      h1.display-4 Breakdown
-      .row
-        .col
-          .card
-            .card-header
-              h2 Permanently Lost
-              h4 #{helpers.format(total_lost/100000000, 8)} BTC
-            ul.list-group.list-group-flush
-              li.list-group-item Lost via Miners
-              li.list-group-item &nbsp; &nbsp; Unclaimed fees and block rewards: #{helpers.format(1234567890/100000000, 8)} BTC
-              li.list-group-item Lost via Transactions
-              li.list-group-item &nbsp; &nbsp; OP_RETURN Unspendable #{helpers.format(1212345678/100000000, 8)} BTC
-              li.list-group-item &nbsp; &nbsp; Addresses not on ECDSA Curve #{helpers.format(212345678/100000000, 8)} BTC
-        .col
-          .card
-            .card-header
-              h2 Likely Lost
-              h4 #{helpers.format(total_lost/100000000, 8)} BTC
-            ul.list-group.list-group-flush
-              li.list-group-item 11111111111111111lost #{helpers.format(1212345678/100000000, 8)} BTC
-              li.list-group-item whatever #{helpers.format(12345678/100000000, 8)} BTC
 
       a.btn.btn-primary(href='/current') Latest Block
 
