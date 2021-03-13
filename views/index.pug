@@ -25,8 +25,10 @@ block content
             ul.list-group.list-group-flush
               li.list-group-item New Supply This Block: #{helpers.format(latest_block.allowed_supply/100000000, 8)} BTC
               li.list-group-item Fees Paid to Miner: #{helpers.format(latest_block.fee_sum/100000000, 8)} BTC
-              li.list-group-item.list-group-item-success Loss in This Block: #{helpers.format(latest_block.transactional_loss/100000000, 8)} BTC
-
+              li.list-group-item Loss in This Block: #{helpers.format(latest_block.transactional_loss/100000000, 8)} BTC
+    .container
+      p We're tracking provably lost bitcoin through <a href="https://github.com/anders94/bitcoin-supply.com/blob/main/detectors/index.js">publicly available logic</a>. Discussion about <a href="https://github.com/anders94/bitcoin-supply.com/tree/main/proposals">proposals</a> happens in GitHub <a href="https://github.com/anders94/bitcoin-supply.com/issues">issues</a> and are added and amended via <a href="https://github.com/anders94/bitcoin-supply.com/pulls">pull requests</a>.
+      p Coin is provably lost by miners not accepting all available rewards. For example, in block <a href="/block/XXXXXX">XXX,XXX</a> the miner didn't accept the 6.5 BTC block reward. Coin is also provably lost by users creating transactions which cause coin to be unspendable. For example, in transaction <a href="/transaction/00000000000000000000000000000000000000000">XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</a>, the MtGox exchange made 2,609.36304319 BTC unspendable. Bitcoin can also be lost in more esoteric ways due to quirks of the underlying software such as the coinbase rewqard in the first block although these have been fairly very rare.
       a.btn.btn-primary(href='/current') Latest Block
 
   .container
