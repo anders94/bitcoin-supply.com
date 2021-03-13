@@ -1,11 +1,10 @@
 body {
     font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
     min-height: 75rem;
-    padding-top: 20px;
 }
 
 .container {
-    padding-top: 60px;
+    padding-top: 20px;
 }
 
 .footer > .container {
