@@ -1,0 +1,12 @@
+extends layout
+
+block content
+  main(role='main')
+    .jumbotron
+      .container
+        .card
+          .card-header
+            h3 #{transaction.tx_hash}
+            p Transaction Hash
+          .card-body
+            p some stuff here

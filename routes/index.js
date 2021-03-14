@@ -157,5 +157,41 @@ router.get('/block/:block_number', [check('block_number', 'Sorry, a block\'s ID 
     }
 });
 
+router.get('/transaction/:tx_hash', [check('tx_hash', 'Sorry, that doesn\'t look like a valid transaction hash.').trim().isHexadecimal()], async (req, res, next) => {
+    const errors = validationResult(req);
+    if (errors.isEmpty()) {
+	const { tx_hash } = req.params;
+
+        if (!tx_hash)
+            throw new Error('Missing transaction hash');
+
+	const tx = await db.query(
+            `SELECT *
+             FROM transactions
+             WHERE tx_hash = $1`,
+            [tx_hash]);
+
+	if (tx.rows[0]) {
+	    return res.render('transaction', {title: 'Transaction '+tx_hash+' | Bitcoin Supply', transaction: tx.rows[0]});
+	}
+	else
+	    return res.render('error', {
+		message: 'Whoops! Doesn\'t look like I have that transaction.',
+		error: {
+                    status: 'Can\'t find that transaction.',
+                    stack: 'The transaction you are referencing either does not exist or isn\'t one we have flagged with supply loss.'
+		}
+	    });
+    }
+    else
+	return res.render('error', {
+	    message: 'Whoops! That doesn\'t look right.',
+	    error: {
+		status: 'Must be a positive integer.',
+		stack: 'Please enter a positive integer.'
+	    }
+	});
+});
+
 db.connect(); // TODO: actually await this
 module.exports = router;
