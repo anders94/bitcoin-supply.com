@@ -7,11 +7,11 @@ block content
         .col
           .card
             .card-header
-              h2 #{helpers.format(total_possible_supply/100000000000000, 4)} Million BTC
-              p Total Expected Supply
-            .card-body
-              h4 #{helpers.format(latest_block.current_total_supply/100000000, 8)} BTC
+              h2 #{helpers.format(latest_block.current_total_supply/100000000, 8)} BTC
               p Current Supply
+            .card-body
+              h4 #{helpers.format(total_possible_supply/100000000000000, 4)} Million BTC
+              p Total Expected Supply
               h4 #{(100-(latest_block.current_total_supply/total_possible_supply)*100).toFixed(3)}%
               p Amount of Supply Released
               h4 #{helpers.format(total_lost/100000000, 8)} BTC
