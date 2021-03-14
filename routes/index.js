@@ -8,9 +8,11 @@ const db = require('../db');
 const config = require('../config');
 
 router.get('/', async (req, res, next) => {
-    const current_supply = await db.query(
-	`SELECT SUM(new_supply) AS supply
-         FROM blocks`);
+    const latest_block = await db.query(
+        `SELECT *
+         FROM blocks
+         ORDER BY block_number DESC
+         LIMIT 1`);
 
     const total_lost = await db.query(
 	`SELECT COALESCE(SUM(allowed_supply), 0) - COALESCE(SUM(new_supply), 0) AS lost
@@ -24,21 +26,13 @@ router.get('/', async (req, res, next) => {
          ORDER BY block_number ASC
          LIMIT 50`);
 
-    const latest = await db.query(
-        `SELECT *
-         FROM blocks
-         ORDER BY block_number DESC
-         LIMIT 1`);
-
     const total_possible_supply = BigInt(2099999997690000n)-BigInt(total_lost.rows[0].lost);
 
     return res.render('index', {
-	title: 'Bitcoin Supply',
-	current_supply: current_supply.rows[0].supply,
+	latest_block: latest_block.rows[0],
 	total_lost: total_lost.rows[0].lost,
-	total_possible_supply: total_possible_supply.toString(),
-	latest_block: latest.rows[0],
-	losses: losses.rows
+	losses: losses.rows,
+	total_possible_supply: total_possible_supply.toString()
     });
 });
 
