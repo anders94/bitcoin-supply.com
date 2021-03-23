@@ -6,7 +6,36 @@ block content
       .container
         .card
           .card-header
-            h3 #{transaction.tx_hash}
-            p Transaction Hash
+            h3 Transaction
           .card-body
-            p some stuff here
+            ul.list-group.list-group-flush
+              li.list-group-item Hash: #{transaction.tx_hash}
+              li.list-group-item Block: #{transaction.block_number}
+              if transaction.is_coinbase
+                li.list-group-item Coinbase Transaction
+              li.list-group-item Input Value: #{helpers.format(transaction.input_value / 100000000, 8)} BTC
+              li.list-group-item Output Value: #{helpers.format(transaction.output_value / 100000000, 8)} BTC
+              li.list-group-item Fee: #{transaction.fee}
+        .row
+          .col
+            .card
+              .card-header
+                h4 Inputs
+              .card-body
+                each input in inputs
+                  ul.list-group.list-group-flush
+                    li.list-group-item Index: #{input.input_index}
+                    li.list-group-item Value: #{helpers.format(input.input_value / 100000000, 8)} BTC
+                    li.list-group-item Script: #{input.script_asm}
+                    li.list-group-item Addresses: #{input.addresses}
+          .col
+            .card
+              .card-header
+                h4 Outputs
+              .card-body
+                each output in outputs
+                  ul.list-group.list-group-flush
+                    li.list-group-item Index: #{output.output_index}
+                    li.list-group-item Value: #{helpers.format(output.output_value / 100000000, 8)} BTC
+                    li.list-group-item Script: #{output.script_asm}
+                    li.list-group-item Addresses: #{output.addresses}

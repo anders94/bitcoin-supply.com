@@ -4,6 +4,24 @@ block content
   main(role='main')
     .jumbotron
       .container
+        .card
+          if block.allowed_supply != block.new_supply
+            .card-header.alert.alert-danger
+              include includes/block-header.pug
+          else
+            .card-header.alert.alert-success
+              include includes/block-header.pug
+          include includes/block-body.pug
+
+    .container
+      pre
+        | Block
+        | Block
+        | Block
+        | #{JSON.stringify(block)}
+        | Block
+        | Block
+      .container
         if block.allowed_supply != block.new_supply
           .alert.alert-danger
             h1.display-3 Block #{helpers.format(block.block_number)}

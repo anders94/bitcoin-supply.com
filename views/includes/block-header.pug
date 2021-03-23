@@ -1,0 +1,4 @@
+h2 Block #{helpers.format(block.block_number)}
+p Mined #{new Date(block.block_timestamp).toLocaleDateString('en-us', {year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', timeZone: 'utc'})} UTC
+  if moment().isAfter(block.block_timestamp)
+    |  (#{moment(block.block_timestamp).from()})

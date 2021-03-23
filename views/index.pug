@@ -13,7 +13,7 @@ block content
               h4 #{helpers.format(total_possible_supply/100000000000000, 4)} Million BTC
               p Total Expected Supply
               h4 #{((latest_block.current_total_supply/total_possible_supply)*100).toFixed(3)}%
-              p Amount of Supply Released
+              p Amount of Total Expected Supply Released
               h4 #{helpers.format(total_lost/100000000, 8)} BTC
               p Permanently Lost
         .col
@@ -30,8 +30,8 @@ block content
                 .row
                   .col
                     a.btn.btn-primary(href='/block/'+(Number(latest_block.block_number)-1)) &lt;&lt; Prev
-                  .col.text-right
-                    a.btn.btn-primary(href='/block/'+(Number(latest_block.block_number)+1)) Next &gt;&gt;
+                  //.col.text-right
+                  //  a.btn.btn-primary(href='/block/'+(Number(latest_block.block_number)+1)) Next &gt;&gt;
 
     .container
       p We're tracking provably lost bitcoin through <a href="https://github.com/anders94/bitcoin-supply.com/blob/main/detectors/index.js">publicly available logic</a>. Discussion about <a href="https://github.com/anders94/bitcoin-supply.com/tree/main/proposals">proposals</a> for this logic happens in GitHub <a href="https://github.com/anders94/bitcoin-supply.com/issues">issues</a> and are added and amended via <a href="https://github.com/anders94/bitcoin-supply.com/pulls">pull requests</a>.

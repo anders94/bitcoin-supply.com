@@ -1,0 +1,16 @@
+ul.list-group.list-group-flush
+  li.list-group-item New Supply This Block: #{helpers.format(block.allowed_supply/100000000, 8)} BTC
+  li.list-group-item Fees Paid to Miner: #{helpers.format(block.fee_sum/100000000, 8)} BTC
+  li.list-group-item Loss in This Block: #{helpers.format(block.transactional_loss/100000000, 8)} BTC
+  li.list-group-item Transactions in this Block: #{block.transaction_count}
+  li.list-group-item Inputs #{helpers.format(block.input_sum/100000000, 8)} BTC
+  li.list-group-item Outputs #{helpers.format(block.output_sum/100000000, 8)} BTC
+  li.list-group-item Fees #{helpers.format(block.fee_sum/100000000, 8)} BTC
+  li.list-group-item
+    .row
+      .col
+        a.btn.btn-primary(href='/block/'+(Number(block.block_number)-1)) &lt;&lt; Previous Block
+      .col.text-center
+        a.btn.btn-primary(href='/current') Latest Block
+      .col.text-right
+        a.btn.btn-primary(href='/block/'+(Number(block.block_number)+1)) Next Block &gt;&gt;

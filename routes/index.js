@@ -166,7 +166,24 @@ router.get('/transaction/:tx_hash', [check('tx_hash', 'Sorry, that doesn\'t look
             [tx_hash]);
 
 	if (tx.rows[0]) {
-	    return res.render('transaction', {title: 'Transaction '+tx_hash+' | Bitcoin Supply', transaction: tx.rows[0]});
+	    const inputs = await db.query(
+		`SELECT *
+                 FROM inputs
+                 WHERE tx_hash = $1`,
+		[tx_hash]);
+
+	    const outputs = await db.query(
+		`SELECT *
+                 FROM outputs
+                 WHERE tx_hash = $1`,
+		[tx_hash]);
+
+	    return res.render('transaction', {
+		title: 'Transaction '+tx_hash+' | Bitcoin Supply',
+		transaction: tx.rows[0],
+		inputs: inputs.rows,
+		outputs: outputs.rows
+	    });
 	}
 	else
 	    return res.render('error', {
