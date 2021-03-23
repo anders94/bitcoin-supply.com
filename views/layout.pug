@@ -46,7 +46,12 @@ html.h-100(lang='en')
           .navbar-text &copy; #{new Date().getFullYear()} 
             a.navbar-text(href='/', tabindex=-1) Bitcoin-Supply.com
 
+  script(async, src='https://www.googletagmanager.com/gtag/js?id=G-QR2SXVYGER')
   script.
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-QR2SXVYGER');
     $(() => {
       $('#search').focus();
     });
