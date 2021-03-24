@@ -35,7 +35,13 @@ block content
               .card-body
                 each output in outputs
                   ul.list-group.list-group-flush
-                    li.list-group-item Index: #{output.output_index}
-                    li.list-group-item Value: #{helpers.format(output.output_value / 100000000, 8)} BTC
-                    li.list-group-item Script: #{output.script_asm}
-                    li.list-group-item Addresses: #{output.addresses}
+                    if output.supply_loss
+                      li.list-group-item.list-group-item-danger Index: #{output.output_index}
+                      li.list-group-item.list-group-item-danger Value: #{helpers.format(output.output_value / 100000000, 8)} BTC
+                      li.list-group-item.list-group-item-danger Script: #{output.script_asm}
+                      li.list-group-item.list-group-item-danger Addresses: #{output.addresses}
+                    else
+                      li.list-group-item Index: #{output.output_index}
+                      li.list-group-item Value: #{helpers.format(output.output_value / 100000000, 8)} BTC
+                      li.list-group-item Script: #{output.script_asm}
+                      li.list-group-item Addresses: #{output.addresses}
