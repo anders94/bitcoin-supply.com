@@ -4,29 +4,14 @@ block content
   main(role='main')
     .jumbotron
       .container
-        .alert.alert-info
-          h1.display-3 Block #{helpers.format(block_number)}
-          h3 #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')} (estimated)
-          p This block hasn't been mined yet.
-        table.table.table-striped
-          tbody
-            tr
-              th Allowed Supply
-              td #{helpers.format(block.allowed_supply/100000000, 8)} BTC
-            //tr
-            //  th Total Supply as of this Block
-            //  td #{helpers.format(block.current_total_supply/100000000, 8)} BTC
-            tr
-              th Blocks until next halving
-              td= helpers.format(block.blocks_till_halving)
+        .card
+          .card-header.alert.alert-info
+            h2 Block #{helpers.format(block.block_number)}
+            p Estimated #{new Date(block.block_timestamp).toLocaleDateString('en-us', {year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', timeZone: 'utc'})} UTC
+            if moment().isBefore(block.block_timestamp)
+              |  (#{moment(block.block_timestamp).from()})
+            p This block hasn't been mined yet.
+          include includes/block-body.pug
 
     .container
-      p This block hasn't been mined yet. We estimate it should be mined around #{moment(block.block_timestamp).format('llll')}.
-      .row
-        .col
-          if block_number > 0
-            a.btn.btn-primary(href='/block/'+(Number(block_number)-1)) &lt;&lt; Previous
-        .col.text-center
-          a.btn.btn-primary(href='/current') Latest Block
-        .col.text-right
-          a.btn.btn-primary(href='/block/'+(Number(block_number)+1)) Next &gt;&gt;
+      p This block hasn't been mined yet.
