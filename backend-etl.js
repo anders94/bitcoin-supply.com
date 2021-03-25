@@ -109,7 +109,8 @@ const launchBitcoinETL = async (startblock) => {
 	'stream', '--chain', 'bitcoin',
 	'--start-block', startblock,
 	'--block-batch-size', 1, // we depend on getting one block's transactions at a time in the stream
-	'--provider-uri', providerURI
+	'--provider-uri', providerURI,
+	'--lag', 6               // lag by 6 blocks so we don't ingest minor reorgs
     ], { stdio: ['ignore', 'pipe', process.stderr]} );
 
     await processReadable(bitcoinetl.stdout);
