@@ -4,3 +4,4 @@ node_modules/
 env/
 notes.txt
 last_synced_block.txt
+.DS_Store
