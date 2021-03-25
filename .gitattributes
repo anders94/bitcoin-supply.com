@@ -1,0 +1,2 @@
+migrations/backfill/sqls/ filter=lfs diff=lfs merge=lfs -text
+migrations/backfill/sqls/*.sql filter=lfs diff=lfs merge=lfs -text
