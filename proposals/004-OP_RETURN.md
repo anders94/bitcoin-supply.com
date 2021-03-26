@@ -1,5 +1,6 @@
 # Proposal 004 - OP_RETURN
-UTXOs with scripts beginning with `OP_RETURN` are unspendable and are classified as *Provably Lost*.
+UTXOs with a positive value and scripts beginning with `OP_RETURN` are unspendable and are
+classified as *Provably Lost*.
 
 | Field               | Value             |
 | --------------------|-------------------|
