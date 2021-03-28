@@ -12,3 +12,9 @@ block content
             .card-header.alert.alert-success
               include includes/block-header.pug
           include includes/block-body.pug
+    .container
+      ul.list-group.list-group-flush
+        each tx in transactions
+          li.list-group-item 
+            a(href='/transaction/'+tx.tx_hash)= tx.tx_hash
+            |  Loss: #{helpers.format(tx.loss/100000000, 8)} BTC

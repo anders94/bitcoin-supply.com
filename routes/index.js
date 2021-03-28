@@ -118,8 +118,29 @@ router.get('/block/:block_number', [check('block_number', 'Sorry, a block\'s ID 
             [block_number]);
 
 	if (block.rows[0]) {
-	    if (block.rows[0].block_number == block_number)
-		return res.render('block', {title: 'Block '+helpers.format(block_number)+' | Bitcoin Supply', block: block.rows[0]});
+	    if (block.rows[0].block_number == block_number) {
+		if (block.rows[0].allowed_supply != block.rows[0].new_supply) {
+		    const txs = await db.query(
+			`SELECT *,
+                           (SELECT SUM(output_value)
+                            FROM outputs
+                            WHERE tx_hash = t.tx_hash
+                              AND supply_loss = TRUE) AS loss 
+                         FROM transactions t 
+                         WHERE block_number = $1`,
+			[block.rows[0].block_number]);
+		    return res.render('block', {
+			title: 'Block '+helpers.format(block_number)+' | Bitcoin Supply',
+			block: block.rows[0],
+			transactions: txs.rows
+		    });
+		}
+		else
+		    return res.render('block', {
+			title: 'Block '+helpers.format(block_number)+' | Bitcoin Supply',
+			block: block.rows[0]
+		    });
+	    }
 	    else {
 		let theroreticalBlock = {block_number: block_number};
 		const blocksAhead = block_number - block.rows[0].block_number;
