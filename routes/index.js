@@ -138,7 +138,8 @@ router.get('/block/:block_number', [check('block_number', 'Sorry, a block\'s ID 
 		else
 		    return res.render('block', {
 			title: 'Block '+helpers.format(block_number)+' | Bitcoin Supply',
-			block: block.rows[0]
+			block: block.rows[0],
+			transactions: []
 		    });
 	    }
 	    else {
@@ -149,7 +150,7 @@ router.get('/block/:block_number', [check('block_number', 'Sorry, a block\'s ID 
 		//theroreticalBlock.current_total_supply = 0;
 		theroreticalBlock.blocks_till_halving = 210000 - block_number % 210000;
 		return res.render('theroretical-block', {title: 'Block '+helpers.format(block_number)+' (unmined) | Bitcoin Supply',
-							 block_number: block_number, block: theroreticalBlock});
+							 block_number: block_number, block: theroreticalBlock, transactions: []});
 	    }
 	}
 	return res.render('error', {
