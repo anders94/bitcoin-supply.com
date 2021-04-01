@@ -15,7 +15,7 @@ the transactions in a block.
 Coin classified as *likely lost*, as its name would imply, is a more subjective
 label. This include coins that are likely unspendable due to the loss of
 private keys. While this type of loss can never be proven, it is still a useful
-estimation.
+estimation. (not currently shown)
 
 ## Contributions
 
@@ -43,7 +43,6 @@ on your system.
 * Node.js
 * PostgreSQL
 * Indexed Bitcoin Full Node (with RPC configured and the `-txindex` flag)
-* (optional) Google BigQuery account with JSON credential file
 * bitcoin-etl (python based - `pip install bitcoin-etl`)
 
 ### Installing
@@ -89,35 +88,45 @@ Run all the database migrations:
 db-migrate up
 ```
 
-Optionally, to walk backwards taking the migrations down one by one, use:
+Optionally, to step backwards taking the migrations down migration by migration, use:
 ```
 db-migrate down
 ```
 
+## Environment Variables
+A quick peek at `config/index.js` reveales a set of defaults and environment variables.
+
+Variable | Default
+---------|--------
+PGHOST | localhost
+PGDATABASE | bitcoin-supply_dev
+PGUSER | bitcoin-supply
+PGPASSWORD | supersecretpassword
+RPCHOST | 127.0.0.1
+RPCPORT | 8332
+RPCNETWORK | mainnet
+RPCUSERNAME | rpcuser
+RPCPASSWORD | supersecretpassword
+
+Both the webserver and the backend rely on the same environment variables so sourcing a
+file or using a tool like `chpst` is convenient. `env/` is in `.gitignore`.
+
 ## Running
-A complete system requires running both the website and the backend process which
-updates the database as new blocks come in.
-
-Sync the database from a large BigQuery download: (costly but far quicker than using
-RPC on a full node)
+Start the backend process which updates the database as new blocks come in.
 
 ```
-node backend-bigquery
+node backend-etl
 ```
+Starting from a blank database will take at least a month to catch up to current as the
+backend steps through each block one by one running the loss detection logic. Using the
+backfill mentioned above significantly reduces this overhead.
 
-On an ongoing basis, run the RPC based backend to keep website synced with the bitcoin
-blockchain.
-
-```
-node backend-rpc
-```
-
-Start the webserver:
+Then, start the webserver:
 ```
 node bin/www
 ```
 
-Point your web browser to `http://localhost:3000`.
+Point your web browser at `http://localhost:3000` to see the frontend.
 
 ## Authors
 
