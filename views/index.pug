@@ -25,7 +25,8 @@ block content
             ul.list-group.list-group-flush
               li.list-group-item New Supply This Block: #{helpers.format(latest_block.allowed_supply/100000000, 8)} BTC
               li.list-group-item Fees Paid to Miner: #{helpers.format(latest_block.fee_sum/100000000, 8)} BTC
-              li.list-group-item Loss in This Block: #{helpers.format(latest_block.transactional_loss/100000000, 8)} BTC
+              li.list-group-item Miner Loss: #{helpers.format(latest_block.miner_loss/100000000, 8)} BTC
+              li.list-group-item Transactional Loss: #{helpers.format(latest_block.transactional_loss/100000000, 8)} BTC
               li.list-group-item
                 .row
                   .col

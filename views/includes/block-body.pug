@@ -1,8 +1,8 @@
 ul.list-group.list-group-flush
   li.list-group-item New Supply This Block: #{helpers.format(block.allowed_supply/100000000, 8)} BTC
   if block.fee_sum
-    li.list-group-item Fees Paid to Miner: #{helpers.format(block.fee_sum/100000000, 8)} BTC
-    li.list-group-item Loss in This Block: #{helpers.format(block.transactional_loss/100000000, 8)} BTC
+    li.list-group-item Miner Loss: #{helpers.format(block.miner_loss/100000000, 8)} BTC
+    li.list-group-item Transactional Loss: #{helpers.format(block.transactional_loss/100000000, 8)} BTC
     li.list-group-item Transactions in this Block: #{block.transaction_count}
     li.list-group-item Inputs #{helpers.format(block.input_sum/100000000, 8)} BTC
     li.list-group-item Outputs #{helpers.format(block.output_sum/100000000, 8)} BTC

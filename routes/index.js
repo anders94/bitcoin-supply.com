@@ -9,7 +9,7 @@ const config = require('../config');
 
 router.get('/', async (req, res, next) => {
     const latest_block = await db.query(
-        `SELECT *
+        `SELECT *, allowed_supply - transactional_loss - new_supply as miner_loss
          FROM blocks
          ORDER BY block_number DESC
          LIMIT 1`);
@@ -45,7 +45,7 @@ router.get('/losses/:page', [check('page', 'Sorry, the page number must be a pos
     if (errors.isEmpty()) {
 	const { page } = req.params;
 	const losses = await db.query(
-            `SELECT *
+            `SELECT *, allowed_supply - transactional_loss - new_supply as miner_loss
              FROM blocks
              WHERE supply_loss = true
              ORDER BY block_number ASC
@@ -110,7 +110,7 @@ router.get('/block/:block_number', [check('block_number', 'Sorry, a block\'s ID 
             throw new Error('Missing uuid field');
 
 	const block = await db.query(
-            `SELECT *
+            `SELECT *, allowed_supply - transactional_loss - new_supply as miner_loss
              FROM blocks
              WHERE block_number <= $1
              ORDER BY block_number DESC
