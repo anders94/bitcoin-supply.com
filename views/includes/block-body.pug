@@ -9,6 +9,8 @@ ul.list-group.list-group-flush
       li.list-group-item.list-group-item-danger Transactional Loss: #{helpers.format(block.transactional_loss/100000000, 8)} BTC
     else
       li.list-group-item Transactional Loss: #{helpers.format(block.transactional_loss/100000000, 8)} BTC
+    li.list-group-item Total Supply as of This Block: #{helpers.format(block.current_total_supply/100000000, 8)} BTC
+    li.list-group-item Blocks Till Halving: #{helpers.format(block.blocks_till_halving, 0)}
     li.list-group-item Transactions in this Block: #{block.transaction_count}
     li.list-group-item Inputs #{helpers.format(block.input_sum/100000000, 8)} BTC
     li.list-group-item Outputs #{helpers.format(block.output_sum/100000000, 8)} BTC

@@ -32,12 +32,11 @@ block content
                 li.list-group-item.list-group-item-danger Transactional Loss: #{helpers.format(block.transactional_loss/100000000, 8)} BTC
               else
                 li.list-group-item Transactional Loss: #{helpers.format(block.transactional_loss/100000000, 8)} BTC
+              li.list-group-item Blocks Till Halving: #{helpers.format(block.blocks_till_halving, 0)}
               li.list-group-item
                 .row
                   .col
-                    a.btn.btn-primary(href='/block/'+(Number(block.block_number)-1)) &lt;&lt; Prev
-                  //.col.text-right
-                  //  a.btn.btn-primary(href='/block/'+(Number(block.block_number)+1)) Next &gt;&gt;
+                    a.btn.btn-primary(href='/block/'+(Number(block.block_number)-1)) &lt;&lt; Previous Block
 
     .container
       p We're tracking provably lost bitcoin through <a href="https://github.com/anders94/bitcoin-supply.com/blob/main/detectors/index.js">publicly available logic</a>. Discussion about <a href="https://github.com/anders94/bitcoin-supply.com/tree/main/proposals">proposals</a> for this logic happens in GitHub <a href="https://github.com/anders94/bitcoin-supply.com/issues">issues</a> and are added and amended via <a href="https://github.com/anders94/bitcoin-supply.com/pulls">pull requests</a>.
