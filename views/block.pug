@@ -35,9 +35,14 @@ block content
               tr
                 td.text-right Allowed New Supply
                 td #{helpers.format(block.allowed_supply/100000000, 8)} BTC
-              tr
-                td.text-right Miner Loss
-                td #{helpers.format(block.miner_loss/100000000, 8)} BTC
+              if block.miner_loss != 0
+                tr.table-danger
+                  td.text-right Miner Loss
+                  td #{helpers.format(block.miner_loss/100000000, 8)} BTC
+              else
+                tr
+                  td.text-right Miner Loss
+                  td 0.00000000 BTC
 
         .col
           h1 Transactional Loss
