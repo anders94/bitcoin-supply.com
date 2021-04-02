@@ -12,9 +12,43 @@ block content
             .card-header.alert.alert-success
               include includes/block-header.pug
           include includes/block-body.pug
+
     .container
-      ul.list-group.list-group-flush
-        each tx in transactions
-          li.list-group-item 
-            a(href='/transaction/'+tx.tx_hash)= tx.tx_hash
-            |  Loss: #{helpers.format(tx.loss/100000000, 8)} BTC
+      .row
+        .col
+          h1 Miner Loss
+          table.table.table-striped
+            thead
+              tr
+                th.text-right Source
+                th Quantity
+            tbody
+              tr
+                td.text-right Inputs
+                td #{helpers.format(block.input_sum/100000000, 8)} BTC
+              tr
+                td.text-right Outputs
+                td #{helpers.format(block.output_sum/100000000, 8)} BTC
+              tr
+                td.text-right Allowed Fees
+                td #{helpers.format(block.fee_sum/100000000, 8)} BTC
+              tr
+                td.text-right Allowed New Supply
+                td #{helpers.format(block.allowed_supply/100000000, 8)} BTC
+              tr
+                td.text-right Miner Loss
+                td #{helpers.format(block.miner_loss/100000000, 8)} BTC
+
+        .col
+          h1 Transactional Loss
+          table.table.table-striped
+            thead
+              tr
+                th.text-right Transaction ID
+                th Irrecoverably Lost
+            tbody
+              each tx in transactions
+                tr
+                  td.text-right
+                    a(href='/transaction/'+tx.tx_hash)= tx.tx_hash.substr(0, 6) + '.....' + tx.tx_hash.substr(tx.tx_hash.length - 6)
+                  td #{helpers.format(tx.loss / 100000000, 8)} BTC
