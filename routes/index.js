@@ -23,8 +23,8 @@ router.get('/', async (req, res, next) => {
         `SELECT *
          FROM blocks
          WHERE supply_loss = true
-         ORDER BY block_number ASC
-         LIMIT 50`);
+         ORDER BY allowed_supply - new_supply DESC
+         LIMIT 32`);
 
     const total_possible_supply = BigInt(2099999997690000n)-BigInt(total_lost.rows[0].lost);
 
