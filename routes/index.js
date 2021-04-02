@@ -8,7 +8,7 @@ const db = require('../db');
 const config = require('../config');
 
 router.get('/', async (req, res, next) => {
-    const latest_block = await db.query(
+    const block = await db.query(
         `SELECT *, allowed_supply - transactional_loss - new_supply as miner_loss
          FROM blocks
          ORDER BY block_number DESC
@@ -29,7 +29,7 @@ router.get('/', async (req, res, next) => {
     const total_possible_supply = BigInt(2099999997690000n)-BigInt(total_lost.rows[0].lost);
 
     return res.render('index', {
-	latest_block: latest_block.rows[0],
+	block: block.rows[0],
 	total_lost: total_lost.rows[0].lost,
 	losses: losses.rows,
 	total_possible_supply: total_possible_supply.toString()
