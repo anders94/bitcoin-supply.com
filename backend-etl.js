@@ -124,9 +124,10 @@ const main = async () => {
     if (!start_block)
 	start_block = await db.getLatestBlock() + 1;
 
+    //start_block = 91722; // duplicate transactionid
     //start_block = 124724; // Miner block loss
-    //start_block = 640862; // OP_RETURN tx loss
     //start_block = 150951; // MtGox tx loss
+    //start_block = 640862; // OP_RETURN tx loss
 
     console.log('starting at block number', start_block);
     launchBitcoinETL(start_block);
