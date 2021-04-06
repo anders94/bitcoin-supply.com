@@ -8,7 +8,7 @@ module.exports = {
     },
     outputLoss: (block, transaction, output) => {
 	// Proposal 000 - Block 0 Coinbase
-	if (block.block_number == 0) {
+	if (block.number == 0) {
 	    return true;
 	}
 	// Proposal 001 - Conflicting Coinbase Transaction IDs
