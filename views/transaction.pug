@@ -10,7 +10,8 @@ block content
           .card-body
             ul.list-group.list-group-flush
               li.list-group-item Hash: #{transaction.tx_hash}
-              li.list-group-item Block: #{transaction.block_number}
+              li.list-group-item Block: 
+                a(href='/block/'+transaction.block_number)= helpers.format(transaction.block_number)
               if transaction.is_coinbase
                 li.list-group-item Coinbase Transaction
               li.list-group-item Input Value: #{helpers.format(transaction.input_value / 100000000, 8)} BTC

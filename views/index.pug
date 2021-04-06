@@ -7,12 +7,12 @@ block content
         .col
           .card
             .card-header
-              h2 #{helpers.format(latest_block.current_total_supply/100000000, 8)} BTC
+              h2 #{helpers.format(block.current_total_supply/100000000, 8)} BTC
               p Current Supply
             .card-body
               h4 #{helpers.format(total_possible_supply/100000000000000, 4)} Million BTC
               p Total Expected Supply
-              h4 #{((latest_block.current_total_supply/total_possible_supply)*100).toFixed(3)}%
+              h4 #{((block.current_total_supply/total_possible_supply)*100).toFixed(3)}%
               p Amount of Total Expected Supply Released
               h4 #{helpers.format(total_lost/100000000, 8)} BTC
               p Permanently Lost
@@ -20,18 +20,23 @@ block content
           .card
             .card-header
               h2 Block 
-                a(href='/block/'+latest_block.block_number)= helpers.format(latest_block.block_number)
-              p Mined #{new Date(latest_block.block_timestamp).toLocaleDateString('en-us', {year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', timeZone: 'utc'})} UTC
+                a(href='/block/'+block.block_number)= helpers.format(block.block_number)
+              p Mined #{new Date(block.block_timestamp).toLocaleDateString('en-us', {year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', timeZone: 'utc'})} UTC
             ul.list-group.list-group-flush
-              li.list-group-item New Supply This Block: #{helpers.format(latest_block.allowed_supply/100000000, 8)} BTC
-              li.list-group-item Fees Paid to Miner: #{helpers.format(latest_block.fee_sum/100000000, 8)} BTC
-              li.list-group-item Loss in This Block: #{helpers.format(latest_block.transactional_loss/100000000, 8)} BTC
+              li.list-group-item New Supply This Block: #{helpers.format(block.allowed_supply/100000000, 8)} BTC
+              if block.miner_loss != 0
+                li.list-group-item.list-group-item-danger Miner Loss: #{helpers.format(block.miner_loss/100000000, 8)} BTC
+              else
+                li.list-group-item Miner Loss: #{helpers.format(block.miner_loss/100000000, 8)} BTC
+              if block.transactional_loss != 0
+                li.list-group-item.list-group-item-danger Transactional Loss: #{helpers.format(block.transactional_loss/100000000, 8)} BTC
+              else
+                li.list-group-item Transactional Loss: #{helpers.format(block.transactional_loss/100000000, 8)} BTC
+              li.list-group-item Blocks Till Halving: #{helpers.format(block.blocks_till_halving, 0)}
               li.list-group-item
                 .row
                   .col
-                    a.btn.btn-primary(href='/block/'+(Number(latest_block.block_number)-1)) &lt;&lt; Prev
-                  //.col.text-right
-                  //  a.btn.btn-primary(href='/block/'+(Number(latest_block.block_number)+1)) Next &gt;&gt;
+                    a.btn.btn-primary(href='/block/'+(Number(block.block_number)-1)) &lt;&lt; Previous Block
 
     .container
       p We're tracking provably lost bitcoin through <a href="https://github.com/anders94/bitcoin-supply.com/blob/main/detectors/index.js">publicly available logic</a>. Discussion about <a href="https://github.com/anders94/bitcoin-supply.com/tree/main/proposals">proposals</a> for this logic happens in GitHub <a href="https://github.com/anders94/bitcoin-supply.com/issues">issues</a> and are added and amended via <a href="https://github.com/anders94/bitcoin-supply.com/pulls">pull requests</a>.

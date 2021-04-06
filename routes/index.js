@@ -8,8 +8,8 @@ const db = require('../db');
 const config = require('../config');
 
 router.get('/', async (req, res, next) => {
-    const latest_block = await db.query(
-        `SELECT *
+    const block = await db.query(
+        `SELECT *, allowed_supply - transactional_loss - new_supply as miner_loss
          FROM blocks
          ORDER BY block_number DESC
          LIMIT 1`);
@@ -23,13 +23,13 @@ router.get('/', async (req, res, next) => {
         `SELECT *
          FROM blocks
          WHERE supply_loss = true
-         ORDER BY block_number ASC
-         LIMIT 50`);
+         ORDER BY allowed_supply - new_supply DESC
+         LIMIT 32`);
 
     const total_possible_supply = BigInt(2099999997690000n)-BigInt(total_lost.rows[0].lost);
 
     return res.render('index', {
-	latest_block: latest_block.rows[0],
+	block: block.rows[0],
 	total_lost: total_lost.rows[0].lost,
 	losses: losses.rows,
 	total_possible_supply: total_possible_supply.toString()
@@ -45,7 +45,7 @@ router.get('/losses/:page', [check('page', 'Sorry, the page number must be a pos
     if (errors.isEmpty()) {
 	const { page } = req.params;
 	const losses = await db.query(
-            `SELECT *
+            `SELECT *, allowed_supply - transactional_loss - new_supply as miner_loss
              FROM blocks
              WHERE supply_loss = true
              ORDER BY block_number ASC
@@ -110,7 +110,7 @@ router.get('/block/:block_number', [check('block_number', 'Sorry, a block\'s ID 
             throw new Error('Missing uuid field');
 
 	const block = await db.query(
-            `SELECT *
+            `SELECT *, allowed_supply - transactional_loss - new_supply as miner_loss
              FROM blocks
              WHERE block_number <= $1
              ORDER BY block_number DESC
@@ -118,8 +118,30 @@ router.get('/block/:block_number', [check('block_number', 'Sorry, a block\'s ID 
             [block_number]);
 
 	if (block.rows[0]) {
-	    if (block.rows[0].block_number == block_number)
-		return res.render('block', {title: 'Block '+helpers.format(block_number)+' | Bitcoin Supply', block: block.rows[0]});
+	    if (block.rows[0].block_number == block_number) {
+		if (block.rows[0].allowed_supply != block.rows[0].new_supply) {
+		    const txs = await db.query(
+			`SELECT *,
+                           (SELECT SUM(output_value)
+                            FROM outputs
+                            WHERE tx_hash = t.tx_hash
+                              AND supply_loss = TRUE) AS loss 
+                         FROM transactions t 
+                         WHERE block_number = $1`,
+			[block.rows[0].block_number]);
+		    return res.render('block', {
+			title: 'Block '+helpers.format(block_number)+' | Bitcoin Supply',
+			block: block.rows[0],
+			transactions: txs.rows
+		    });
+		}
+		else
+		    return res.render('block', {
+			title: 'Block '+helpers.format(block_number)+' | Bitcoin Supply',
+			block: block.rows[0],
+			transactions: []
+		    });
+	    }
 	    else {
 		let theroreticalBlock = {block_number: block_number};
 		const blocksAhead = block_number - block.rows[0].block_number;
@@ -128,7 +150,7 @@ router.get('/block/:block_number', [check('block_number', 'Sorry, a block\'s ID 
 		//theroreticalBlock.current_total_supply = 0;
 		theroreticalBlock.blocks_till_halving = 210000 - block_number % 210000;
 		return res.render('theroretical-block', {title: 'Block '+helpers.format(block_number)+' (unmined) | Bitcoin Supply',
-							 block_number: block_number, block: theroreticalBlock});
+							 block_number: block_number, block: theroreticalBlock, transactions: []});
 	    }
 	}
 	return res.render('error', {
