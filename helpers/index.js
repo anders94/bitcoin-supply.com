@@ -18,4 +18,6 @@ exports.allowed_supply = (height) => {
         coinbase=coinbase.divide(2);
 
     return coinbase.toString();
-}
+};
+
+exports.isHex = (str) => str.match(/[0-9a-f]/gi).length == str.length;

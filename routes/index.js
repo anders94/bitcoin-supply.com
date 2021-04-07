@@ -23,7 +23,7 @@ router.get('/', async (req, res, next) => {
         `SELECT *
          FROM blocks
          WHERE supply_loss = true
-         ORDER BY allowed_supply - new_supply DESC
+         ORDER BY allowed_supply - new_supply DESC, block_number ASC
          LIMIT 32`);
 
     const total_possible_supply = BigInt(2099999997690000n)-BigInt(total_lost.rows[0].lost);
@@ -81,12 +81,14 @@ router.get('/losses/:page', [check('page', 'Sorry, the page number must be a pos
 router.post('/search', [], (req, res, next) => {
     if (Number.isInteger(Number(req.body.query)))
 	return res.redirect('/block/' + req.body.query);
+    else if (req.body.query.length == 64 && helpers.isHex(req.body.query))
+	return res.redirect('/transaction/' + req.body.query);
     else
 	return res.render('error', {
-	    message: 'Whoops! That doesn\'t look right.',
+	    message: 'Whoops! Can\'t find what you\'re looking for.',
 	    error: {
-		status: 'Must be a positive integer.',
-		stack: 'Please enter a positive integer.'
+		status: 'Try a block number or a transaction ID.',
+		stack: 'Block numbers are positive integers such as 150951 and transaction IDs are 64 character hexadecimal strings such as 03acfae47d1e0b7674f1193237099d1553d3d8a93ecc85c18c4bec37544fe386.'
 	    }
 	});
 });
