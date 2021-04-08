@@ -20,30 +20,31 @@ block content
     .container
       .row
         .col
-          .card
-            .card-header
-              h4 Inputs
-            .card-body
-              each input in inputs
+          h4 Inputs
+          each input in inputs
+            .card
+              .card-header
+                h4= input.input_index
+              .card-body
                 ul.list-group.list-group-flush
-                  li.list-group-item Index: #{input.input_index}
                   li.list-group-item Value: #{helpers.format(input.input_value / 100000000, 8)} BTC
                   li.list-group-item Script: #{helpers.limit(input.script_asm, 32)}
                   li.list-group-item Addresses: #{input.addresses}
+            | &nbsp;
         .col
-          .card
-            .card-header
-              h4 Outputs
-            .card-body
-              each output in outputs
+          h4 Outputs
+          each output in outputs
+            .card
+              .card-header
+                h4= output.output_index
+              .card-body
                 ul.list-group.list-group-flush
                   if output.supply_loss
-                    li.list-group-item.list-group-item-danger Index: #{output.output_index}
                     li.list-group-item.list-group-item-danger Value: #{helpers.format(output.output_value / 100000000, 8)} BTC
                     li.list-group-item.list-group-item-danger Script: #{helpers.limit(output.script_asm, 32)}
                     li.list-group-item.list-group-item-danger Addresses: #{output.addresses}
                   else
-                    li.list-group-item Index: #{output.output_index}
                     li.list-group-item Value: #{helpers.format(output.output_value / 100000000, 8)} BTC
                     li.list-group-item Script: #{output.script_asm}
                     li.list-group-item Addresses: #{output.addresses}
+            | &nbsp;
