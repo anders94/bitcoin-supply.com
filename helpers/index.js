@@ -21,3 +21,5 @@ exports.allowed_supply = (height) => {
 };
 
 exports.isHex = (str) => str.match(/[0-9a-f]/gi).length == str.length;
+
+exports.limit = (str, len) => str.length > len ? str.substr(0, len) + '...' : str;
