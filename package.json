@@ -10,6 +10,7 @@
     "@rauschma/stringio": "^1.4.0",
     "big-integer": "^1.6.48",
     "bitcoin-core": "^3.0.0",
+    "canvas": "^2.7.0",
     "cookie-parser": "~1.4.4",
     "db-migrate": "^0.11.11",
     "db-migrate-pg": "^1.2.2",

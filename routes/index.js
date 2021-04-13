@@ -3,6 +3,7 @@ const helpers = require('../helpers');
 const express = require('express');
 const router = express.Router();
 const { check, validationResult } = require('express-validator');
+const { createCanvas, loadImage } = require('canvas');
 const moment = require('moment');
 const db = require('../db');
 const config = require('../config');
@@ -34,6 +35,66 @@ router.get('/', async (req, res, next) => {
 	losses: losses.rows,
 	total_possible_supply: total_possible_supply.toString()
     });
+});
+
+router.get('/img/image.png', async (req, res, next) => {
+    const width = 768;
+    const height = 403;
+
+    const canvas = createCanvas(width, height);
+    const context = canvas.getContext('2d');
+
+    const block = await db.query(
+        `SELECT *
+         FROM blocks
+         ORDER BY block_number DESC
+         LIMIT 1`);
+
+    const total_lost = await db.query(
+	`SELECT COALESCE(SUM(allowed_supply), 0) - COALESCE(SUM(new_supply), 0) AS lost
+         FROM blocks
+         WHERE supply_loss = true`);
+
+    const total_possible_supply = BigInt(2099999997690000n)-BigInt(total_lost.rows[0].lost);
+
+    const image = await loadImage('public/images/card-background.png');
+
+    context.drawImage(image, 0, 0, width, height);
+
+    context.fillStyle = '#000000';
+    context.font = 'bold 36pt Helvetica';
+    context.fillText((block.rows[0].current_total_supply/100000000/1000000).toFixed(3) + ' Million BTC', 310, 140);
+    context.fillStyle = '#666666';
+    context.font = '18pt Helvetica';
+    context.fillText('Current Supply', 310, 176);
+
+    context.fillStyle = '#000000';
+    context.font = 'bold 36pt Helvetica';
+    context.fillText((Number(total_possible_supply)/100000000/1000000).toFixed(3) + ' Million BTC', 310, 238);
+    context.fillStyle = '#666666';
+    context.font = '18pt Helvetica';
+    context.fillText('Total Expected Supply', 310, 266);
+
+    context.fillStyle = '#000000';
+    context.font = 'bold 36pt Helvetica';
+    context.fillText(((block.rows[0].current_total_supply / Number(total_possible_supply)) * 100).toFixed(3) + '%', 310, 325);
+    context.fillStyle = '#666666';
+    context.font = '18pt Helvetica';
+    context.fillText('Expected Supply Released', 310, 353);
+
+    context.fillStyle = '#FFFFFF';
+    context.font = '11pt Helvetica';
+    context.textAlign = 'center';
+    context.fillText('As of block ' + block.rows[0].block_number +
+		     ' mined ' + block.rows[0].block_timestamp +
+		     ' - Bitcoin-Supply.com', width / 2, 390);
+
+    const img = canvas.toBuffer('image/png');
+
+    res.set({'Content-Type': 'image/png'});
+    res.set({'Content-Length': img.length});
+    res.send(img);
+
 });
 
 router.get('/losses', async (req, res, next) => {
