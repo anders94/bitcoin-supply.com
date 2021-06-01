@@ -62,28 +62,28 @@ router.get('/img/image.png', async (req, res, next) => {
     context.drawImage(image, 0, 0, width, height);
 
     context.fillStyle = '#000000';
-    context.font = 'bold 36pt Helvetica';
+    context.font = 'bold 28pt Helvetica';
     context.fillText((block.rows[0].current_total_supply/100000000/1000000).toFixed(3) + ' Million BTC', 310, 140);
     context.fillStyle = '#666666';
-    context.font = '18pt Helvetica';
+    context.font = '14pt Helvetica';
     context.fillText('Current Supply', 310, 176);
 
     context.fillStyle = '#000000';
-    context.font = 'bold 36pt Helvetica';
+    context.font = 'bold 28pt Helvetica';
     context.fillText((Number(total_possible_supply)/100000000/1000000).toFixed(3) + ' Million BTC', 310, 238);
     context.fillStyle = '#666666';
-    context.font = '18pt Helvetica';
+    context.font = '14pt Helvetica';
     context.fillText('Total Expected Supply', 310, 266);
 
     context.fillStyle = '#000000';
-    context.font = 'bold 36pt Helvetica';
+    context.font = 'bold 28pt Helvetica';
     context.fillText(((block.rows[0].current_total_supply / Number(total_possible_supply)) * 100).toFixed(3) + '%', 310, 325);
     context.fillStyle = '#666666';
-    context.font = '18pt Helvetica';
+    context.font = '14pt Helvetica';
     context.fillText('Expected Supply Released', 310, 353);
 
     context.fillStyle = '#FFFFFF';
-    context.font = '11pt Helvetica';
+    context.font = '9pt Helvetica';
     context.textAlign = 'center';
     context.fillText('As of block ' + block.rows[0].block_number +
 		     ' mined ' + block.rows[0].block_timestamp +
