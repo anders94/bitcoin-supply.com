@@ -20,19 +20,27 @@ router.get('/', async (req, res, next) => {
          FROM blocks
          WHERE supply_loss = true`);
 
-    const losses = await db.query(
+    const latest_losses = await db.query(
+        `SELECT *
+         FROM blocks
+         WHERE supply_loss = true
+         ORDER BY block_number DESC
+         LIMIT 15`);
+
+    const biggest_losses = await db.query(
         `SELECT *
          FROM blocks
          WHERE supply_loss = true
          ORDER BY allowed_supply - new_supply DESC, block_number ASC
-         LIMIT 32`);
+         LIMIT 15`);
 
     const total_possible_supply = BigInt(2099999997690000n)-BigInt(total_lost.rows[0].lost);
 
     return res.render('index', {
 	block: block.rows[0],
 	total_lost: total_lost.rows[0].lost,
-	losses: losses.rows,
+	latest_losses: latest_losses.rows,
+	biggest_losses: biggest_losses.rows,
 	total_possible_supply: total_possible_supply.toString()
     });
 });

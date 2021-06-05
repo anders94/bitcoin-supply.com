@@ -45,14 +45,26 @@ block content
   .container
     .row
       .col
-        h1 Confirmed Losses
+        h1 Biggest Losses
         table.table.table-striped
           thead
             tr
               th.text-right Block
               th Irrecoverably Lost
           tbody
-            each block in losses
+            each block in biggest_losses
+              tr
+                td.text-right
+                  a(href='/block/'+block.block_number) #{helpers.format(block.block_number)}
+                td #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC
+        h1 Latest Losses
+        table.table.table-striped
+          thead
+            tr
+              th.text-right Block
+              th Irrecoverably Lost
+          tbody
+            each block in latest_losses
               tr
                 td.text-right
                   a(href='/block/'+block.block_number) #{helpers.format(block.block_number)}
