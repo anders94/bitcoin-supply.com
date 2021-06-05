@@ -51,26 +51,30 @@ block content
             tr
               th.text-right Block
               th Irrecoverably Lost
+              th Date
           tbody
             each block in biggest_losses
               tr
                 td.text-right
                   a(href='/block/'+block.block_number) #{helpers.format(block.block_number)}
                 td #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC
+                td #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')}
         h1 Latest Losses
         table.table.table-striped
           thead
             tr
               th.text-right Block
               th Irrecoverably Lost
+              th When
           tbody
             each block in latest_losses
               tr
                 td.text-right
                   a(href='/block/'+block.block_number) #{helpers.format(block.block_number)}
                 td #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC
+                td #{moment(block.block_timestamp).from()}
             tr
-              td.text-right(colspan=2)
+              td.text-right(colspan=3)
                 a.btn.btn-primary(href='/losses') Full List &gt;&gt;
 
       .col
