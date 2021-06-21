@@ -45,20 +45,6 @@ block content
   .container
     .row
       .col
-        h1 Biggest Losses
-        table.table.table-striped
-          thead
-            tr
-              th.text-right Block
-              th Irrecoverably Lost
-              th Date
-          tbody
-            each block in biggest_losses
-              tr
-                td.text-right
-                  a(href='/block/'+block.block_number) #{helpers.format(block.block_number)}
-                td #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC
-                td #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')}
         h1 Latest Losses
         table.table.table-striped
           thead
@@ -76,6 +62,20 @@ block content
             tr
               td.text-right(colspan=3)
                 a.btn.btn-primary(href='/losses') Full List &gt;&gt;
+        h1 Biggest Losses
+        table.table.table-striped
+          thead
+            tr
+              th.text-right Block
+              th Irrecoverably Lost
+              th Date
+          tbody
+            each block in biggest_losses
+              tr
+                td.text-right
+                  a(href='/block/'+block.block_number) #{helpers.format(block.block_number)}
+                td #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC
+                td #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')}
 
       .col
         h1 Halvings
