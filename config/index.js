@@ -16,6 +16,11 @@ module.exports = {
 	network: process.env.RPCNETWORK || 'mainnet',
 	username: process.env.RPCUSERNAME || 'rpcuser',
 	password: process.env.RPCPASSWORD || 'supersecretpassword'
+    },
+
+    redis: {
+	host: process.env.REDISHOST || '127.0.0.1',
+	port: process.env.REDISPORT || 6379
     }
 
 }

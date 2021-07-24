@@ -1,9 +1,15 @@
 const fs = require('fs');
 const db = require('./db');
+const redis = require('redis');
 const config = require('./config');
 const detectors = require('./detectors');
 const { spawn } = require('child_process');
 const { chunksToLinesAsync } = require('@rauschma/stringio');
+
+const rc = redis.createClient({
+    host: config.redis.host,
+    port: config.redis.port
+});
 
 const allowedSupply = (height) => {
     let reward = 5000000000n;   // 50 BTC
@@ -25,6 +31,9 @@ const processBlock = async (new_block, current_block) => {
 
 	await db.upsertBlock(current_block);
 	await db.commit();
+	if (current_block.supply_loss)
+	    rc.publish('block-loss', JSON.stringify(current_block));
+
     }
 
     new_block.input_sum = 0n;
@@ -66,6 +75,8 @@ const processTransaction = async (tx, block) => {
 	await db.upsertTransaction(tx);
 	await db.upsertInputs(tx.hash, tx.inputs);
 	await db.upsertOutputs(tx.hash, tx.outputs);
+	rc.publish('transaction-loss', JSON.stringify(tx));
+
     }
 
     return block;
