@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "@google-cloud/bigquery": "^5.4.0",
+    "@rauschma/stringio": "^1.4.0",
     "canvas": "^2.7.0",
     "cookie-parser": "~1.4.4",
     "db-migrate": "^0.11.11",
