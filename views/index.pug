@@ -58,7 +58,8 @@ block content
                 td.text-right
                   a(href='/block/'+block.block_number) #{helpers.format(block.block_number)}
                 td #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC
-                td #{moment(block.block_timestamp).from()}
+                td
+                  span.d-inline-block(tabindex=0, data-bs-toggle='tooltip', data-bs-placement='top', title=moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss'))= moment(block.block_timestamp).from()
             tr
               td.text-right(colspan=3)
                 a.btn.btn-primary(href='/losses') Full List &gt;&gt;
@@ -256,3 +257,10 @@ block content
                 a(href='/block/6930000') 6,930,000
               td 0.00000000 BTC
               td
+
+block javascript
+  script.
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
