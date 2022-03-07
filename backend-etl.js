@@ -32,7 +32,7 @@ const processBlock = async (new_block, current_block) => {
 	await db.upsertBlock(current_block);
 	await db.commit();
 	if (current_block.supply_loss)
-	    rc.publish('block-loss', JSON.stringify(current_block));
+	    rc.publish('block-loss', JSON.stringify(current_block, (k, v) => typeof v === 'bigint' ? v.toString() : v));
 
     }
 
@@ -75,7 +75,7 @@ const processTransaction = async (tx, block) => {
 	await db.upsertTransaction(tx);
 	await db.upsertInputs(tx.hash, tx.inputs);
 	await db.upsertOutputs(tx.hash, tx.outputs);
-	rc.publish('transaction-loss', JSON.stringify(tx));
+	rc.publish('transaction-loss', JSON.stringify(tx, (k, v) => typeof v === 'bigint' ? v.toString() : v));
 
     }
 
