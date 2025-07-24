@@ -3,11 +3,17 @@ const config = require('../config');
 
 const pool = new Pool(config.postgres);
 let client;
+let connected = false;
 
 module.exports = {
     connect: async () => {
-	client = await pool.connect();
+	if (!client)
+	    client = await pool.connect();
+	if (client)
+	    connected = true;
     },
+
+    isConnected: () => connected,
 
     begin: () => client.query('BEGIN'),
 

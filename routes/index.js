@@ -10,8 +10,11 @@ const config = require('../config');
 
 let homepageCache = null;
 
-async function updateHomepageCache() {
+const updateHomepageCache = async () => {
     try {
+	if (!db.isConnected())
+	    await db.connect();
+
 	const start = new Date().getTime();
 
         const block = await db.query(
@@ -60,7 +63,7 @@ async function updateHomepageCache() {
 }
 
 updateHomepageCache();
-setInterval(routes.updateHomepageCache, 60 * 1000);
+setInterval(updateHomepageCache, 60 * 1000);
 
 router.get('/', async (req, res, next) => {
     const cachedData = homepageCache;
