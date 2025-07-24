@@ -8,41 +8,68 @@ const moment = require('moment');
 const db = require('../db');
 const config = require('../config');
 
+let homepageCache = null;
+
+async function updateHomepageCache() {
+    try {
+	const start = new Date().getTime();
+
+        const block = await db.query(
+            `SELECT *, allowed_supply - transactional_loss - new_supply as miner_loss
+             FROM blocks
+             ORDER BY block_number DESC
+             LIMIT 1`);
+
+        const total_lost = await db.query(
+            `SELECT COALESCE(SUM(allowed_supply), 0) - COALESCE(SUM(new_supply), 0) AS lost
+             FROM blocks
+             WHERE supply_loss = true`);
+
+        const latest_losses = await db.query(
+            `SELECT *
+             FROM blocks
+             WHERE supply_loss = true
+             ORDER BY block_number DESC
+             LIMIT 15`);
+
+        const biggest_losses = await db.query(
+            `SELECT *
+             FROM blocks
+             WHERE supply_loss = true
+             ORDER BY allowed_supply - new_supply DESC, block_number ASC
+             LIMIT 15`);
+
+        const total_possible_supply = BigInt(2099999997690000n)-BigInt(total_lost.rows[0].lost);
+
+        homepageCache = {
+            block: block.rows[0],
+            total_lost: total_lost.rows[0].lost,
+            latest_losses: latest_losses.rows,
+            biggest_losses: biggest_losses.rows,
+            total_possible_supply: total_possible_supply.toString()
+        };
+
+        console.log('Homepage cache updated in', new Date().getTime() - start, 'ms');
+
+    }
+    catch (error) {
+        console.error('Error updating homepage cache:', error);
+
+    }
+
+}
+
+updateHomepageCache();
+setInterval(routes.updateHomepageCache, 60 * 1000);
+
 router.get('/', async (req, res, next) => {
-    const block = await db.query(
-        `SELECT *, allowed_supply - transactional_loss - new_supply as miner_loss
-         FROM blocks
-         ORDER BY block_number DESC
-         LIMIT 1`);
+    const cachedData = homepageCache;
 
-    const total_lost = await db.query(
-	`SELECT COALESCE(SUM(allowed_supply), 0) - COALESCE(SUM(new_supply), 0) AS lost
-         FROM blocks
-         WHERE supply_loss = true`);
+    if (!cachedData) {
+        return res.render('startup');
+    }
 
-    const latest_losses = await db.query(
-        `SELECT *
-         FROM blocks
-         WHERE supply_loss = true
-         ORDER BY block_number DESC
-         LIMIT 15`);
-
-    const biggest_losses = await db.query(
-        `SELECT *
-         FROM blocks
-         WHERE supply_loss = true
-         ORDER BY allowed_supply - new_supply DESC, block_number ASC
-         LIMIT 15`);
-
-    const total_possible_supply = BigInt(2099999997690000n)-BigInt(total_lost.rows[0].lost);
-
-    return res.render('index', {
-	block: block.rows[0],
-	total_lost: total_lost.rows[0].lost,
-	latest_losses: latest_losses.rows,
-	biggest_losses: biggest_losses.rows,
-	total_possible_supply: total_possible_supply.toString()
-    });
+    return res.render('index', cachedData);
 });
 
 router.get('/img/image.png', async (req, res, next) => {
@@ -297,5 +324,5 @@ router.get('/transaction/:tx_hash', [check('tx_hash', 'Sorry, that doesn\'t look
 	});
 });
 
-db.connect(); // TODO: actually await this
 module.exports = router;
+module.exports.updateHomepageCache = updateHomepageCache;

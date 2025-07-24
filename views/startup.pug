@@ -1,0 +1,18 @@
+extends layout
+
+block content
+  .container.mt-5
+    .row.justify-content-center
+      .col-md-8.text-center
+        .card
+          .card-body
+            .spinner-border.text-primary.mb-3(role='status')
+              span.sr-only Loading...
+            h3.card-title Hold tight, the server is starting up...
+            p.card-text.text-muted We're loading the latest Bitcoin supply data. This page will automatically refresh in a few seconds.
+
+block javascript
+  script.
+    setTimeout(() => {
+      window.location.reload();
+    }, 5000);
