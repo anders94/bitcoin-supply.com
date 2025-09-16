@@ -42,11 +42,24 @@ block content
           th.text-center Date
       tbody
         each block, index in losses
-          tr
+          - var lostBTC = (block.allowed_supply - block.new_supply) / 100000000
+          - var redIntensity = 0
+          - if (lostBTC > 0) {
+          -   var minAmount = 0.0000001
+          -   var maxAmount = 1.0  // 1 BTC gets maximum red
+          -   var clampedValue = Math.max(minAmount, Math.min(maxAmount, lostBTC))
+          -   var logRatio = Math.log10(clampedValue / minAmount) / Math.log10(maxAmount / minAmount)
+          -   redIntensity = 0.1 + (logRatio * 0.8)
+          -   if (lostBTC > 1.0) {
+          -     redIntensity = 0.9
+          -   }
+          - }
+          - var bgColor = redIntensity > 0 ? `rgba(220, 53, 69, ${redIntensity})` : 'transparent'
+          tr(style=`background-color: ${bgColor};`)
             th ##{helpers.format(page*paginationSize+index+1)}
             td.text-center
               a(href='/block/'+block.block_number)= helpers.format(block.block_number)
-            td.text-center #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC
+            td.text-center #{helpers.format(lostBTC, 8)} BTC
             td.text-center #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')}
 
     nav(aria-label='Page navigation')
