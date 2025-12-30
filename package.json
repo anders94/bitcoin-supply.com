@@ -6,7 +6,6 @@
     "start": "node ./bin/www"
   },
   "dependencies": {
-    "@google-cloud/bigquery": "^5.4.0",
     "@rauschma/stringio": "^1.4.0",
     "canvas": "^2.7.0",
     "cookie-parser": "~1.4.7",
@@ -24,6 +23,6 @@
     "ssh2": ">=1.4.0",
     "tar": ">=6.2.1",
     "twitter-lite": "^1.1.0",
-    "validator": ">=13.7.0"
+    "validator": ">=13.15.20"
   }
 }
