@@ -7,7 +7,7 @@
   },
   "dependencies": {
     "@rauschma/stringio": "^1.4.0",
-    "canvas": "^2.7.0",
+    "canvas": "^2.11.2",
     "cookie-parser": "~1.4.7",
     "db-migrate": "^0.11.11",
     "db-migrate-pg": "^1.2.2",
@@ -21,7 +21,7 @@
     "pug": "3.0.3",
     "redis": "^3.1.2",
     "ssh2": ">=1.4.0",
-    "tar": ">=6.2.1",
+    "tar": ">=7.5.3",
     "twitter-lite": "^1.1.0",
     "validator": ">=13.15.20"
   }
