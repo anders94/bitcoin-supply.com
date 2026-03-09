@@ -45,13 +45,16 @@ block content
               -   }
               - }
               - var barWidth = redIntensity > 0 ? `${redIntensity * 100}%` : '0%'
-              tr.loss-row(style=`--loss-bar-width: ${barWidth};`)
+              tr.loss-data-row
                 td
                   span.text-muted ##{helpers.format(page*paginationSize+index+1)}
                 td.text-end
                   a(href='/block/'+block.block_number).block-number= helpers.format(block.block_number)
                 td.text-end.btc-amount #{helpers.format(lostBTC, 8)} BTC
                 td.timestamp #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')}
+              tr.loss-bar-row
+                td.loss-bar-cell(colspan='4', style='padding: 0; border: none;')
+                  .loss-bar(style=`width: ${barWidth};`)
 
   // Pagination
   nav(aria-label='Page navigation')
