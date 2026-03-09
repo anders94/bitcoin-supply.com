@@ -15,24 +15,28 @@ block content
       | Circulating Supply • Block #{' '}
       a(href='/block/'+block.block_number).text-orange.block-number= helpers.format(block.block_number)
 
-  // Key Metrics Grid
-  .metrics-grid.metrics-grid-two-column
-    .metric-card
-      .metric-value.btc-amount #{helpers.format(total_possible_supply/100000000000000, 4)}M
-      .metric-label Total Expected Supply
-    .metric-card
-      .metric-value.text-orange #{((block.current_total_supply/total_possible_supply)*100).toFixed(3)}%
-      .metric-label Released
-    .metric-card
-      .metric-value.text-danger.btc-amount #{helpers.format(total_lost/100000000, 4)}
-      .metric-label Permanently Lost
-    .metric-card
-      .metric-value.btc-amount #{helpers.format(block.blocks_till_halving, 0)}
-      .metric-label Blocks Till Halving
+  // Supply Overview Section - Side by Side
+  .row.supply-overview-row.mt-4
+    .col-lg-6.mb-4
+      // Key Metrics Grid
+      .metrics-grid.metrics-grid-two-column
+        .metric-card
+          .metric-value.btc-amount #{helpers.format(total_possible_supply/100000000000000, 4)}M
+          .metric-label Total Expected Supply
+        .metric-card
+          .metric-value.text-orange #{((block.current_total_supply/total_possible_supply)*100).toFixed(3)}%
+          .metric-label Released
+        .metric-card
+          .metric-value.text-danger.btc-amount #{helpers.format(total_lost/100000000, 4)}
+          .metric-label Permanently Lost
+        .metric-card
+          .metric-value.btc-amount #{helpers.format(block.blocks_till_halving, 0)}
+          .metric-label Blocks Till Halving
 
-  // Supply Progress Chart
-  .chart-container
-    canvas#supplyProgressChart
+    .col-lg-6.mb-4
+      // Supply Progress Chart
+      .chart-container.supply-chart-container
+        canvas#supplyProgressChart
 
   // Current Block Info Card
   .card.mb-4

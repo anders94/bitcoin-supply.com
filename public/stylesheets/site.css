@@ -404,3 +404,54 @@ main {
     font-size: var(--text-5xl);
   }
 }
+
+/* Supply Overview Section - Homepage Layout */
+.supply-overview-row {
+  margin-bottom: var(--space-8);
+}
+
+/* Adjust metrics grid for side-by-side layout */
+.supply-overview-row .metrics-grid {
+  margin-bottom: 0; /* Remove since .col-lg-6 handles spacing */
+}
+
+/* Chart container adjustments for supply overview */
+.supply-chart-container {
+  height: 400px; /* Taller to match 2x2 metrics grid height */
+  margin-bottom: 0; /* Remove since .col-lg-6 handles spacing */
+}
+
+/* Responsive adjustments */
+@media (min-width: 992px) {
+  /* On large screens, ensure both columns have equal height */
+  .supply-overview-row .col-lg-6 {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .supply-overview-row .metrics-grid,
+  .supply-overview-row .chart-container {
+    flex: 1; /* Equal height for both sections */
+  }
+}
+
+@media (max-width: 991px) {
+  /* On tablets and below, stack vertically */
+  .supply-chart-container {
+    height: 300px; /* Standard chart height */
+  }
+}
+
+@media (max-width: 768px) {
+  /* Mobile: reduce chart height */
+  .supply-chart-container {
+    height: 250px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Small mobile: smallest chart height */
+  .supply-chart-container {
+    height: 200px;
+  }
+}
