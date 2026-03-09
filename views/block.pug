@@ -1,59 +1,93 @@
 extends layout
 
 block content
-  main(role='main')
-    .jumbotron
-      .container
-        .card
-          if block.allowed_supply != block.new_supply
-            .card-header.alert.alert-danger
-              include includes/block-header.pug
+  // Block Header Card
+  .card.block-header.mb-4(class=block.allowed_supply != block.new_supply ? 'has-loss' : 'no-loss')
+    .card-header
+      include includes/block-header.pug
+    include includes/block-body.pug
+
+  // Block Hash Display
+  .card.mb-4
+    .card-header
+      h4.mb-0 Block Hash
+    .card-body
+      .hash-display
+        code #{block.block_hash || 'N/A'}
+
+  // Supply Accounting Section
+  .row.mb-4
+    .col-lg-6.mb-4
+      .card
+        .card-header
+          h4.mb-0 Miner Supply Accounting
+        .card-body.p-0
+          .table-responsive
+            table.table.table-hover.mb-0
+              thead
+                tr
+                  th Source
+                  th.text-end Quantity
+              tbody
+                tr
+                  td Inputs
+                  td.text-end.btc-amount #{helpers.format(block.input_sum/100000000, 8)} BTC
+                tr
+                  td Outputs
+                  td.text-end.btc-amount #{helpers.format(block.output_sum/100000000, 8)} BTC
+                tr
+                  td Allowed Fees
+                  td.text-end.btc-amount #{helpers.format(block.fee_sum/100000000, 8)} BTC
+                tr
+                  td Allowed New Supply
+                  td.text-end.btc-amount.text-orange #{helpers.format(block.allowed_supply/100000000, 8)} BTC
+                if block.miner_loss != 0
+                  tr.tx-loss-indicator
+                    td
+                      strong Miner Loss
+                    td.text-end.btc-amount.text-danger
+                      strong #{helpers.format(block.miner_loss/100000000, 8)} BTC
+                else
+                  tr
+                    td Miner Loss
+                    td.text-end.btc-amount 0.00000000 BTC
+
+    .col-lg-6.mb-4
+      .card
+        .card-header
+          h4.mb-0 Transaction-Based Losses
+        .card-body.p-0
+          if transactions && transactions.length > 0
+            .table-responsive
+              table.table.table-hover.mb-0
+                thead
+                  tr
+                    th Transaction ID
+                    th.text-end Permanently Lost
+                tbody
+                  each tx in transactions
+                    tr
+                      td
+                        a(href='/transaction/'+tx.tx_hash).hash-short= tx.tx_hash.substr(0, 8) + '...' + tx.tx_hash.substr(tx.tx_hash.length - 8)
+                      td.text-end.btc-amount.text-danger #{helpers.format(tx.loss / 100000000, 8)} BTC
           else
-            .card-header.alert.alert-success
-              include includes/block-header.pug
-          include includes/block-body.pug
+            .card-body.text-center.text-muted
+              p.mb-0 No transaction-based losses in this block
 
-    .container
-      .row
-        .col
-          h1 Miner Loss
-          table.table.table-striped
-            thead
-              tr
-                th.text-right Source
-                th Quantity
-            tbody
-              tr
-                td.text-right Inputs
-                td #{helpers.format(block.input_sum/100000000, 8)} BTC
-              tr
-                td.text-right Outputs
-                td #{helpers.format(block.output_sum/100000000, 8)} BTC
-              tr
-                td.text-right Allowed Fees
-                td #{helpers.format(block.fee_sum/100000000, 8)} BTC
-              tr
-                td.text-right Allowed New Supply
-                td #{helpers.format(block.allowed_supply/100000000, 8)} BTC
-              if block.miner_loss != 0
-                tr.table-danger
-                  td.text-right Miner Loss
-                  td #{helpers.format(block.miner_loss/100000000, 8)} BTC
-              else
-                tr
-                  td.text-right Miner Loss
-                  td 0.00000000 BTC
+  // Transaction Loss Visualization Chart (if there are losses)
+  if transactions && transactions.length > 0
+    .chart-container
+      canvas#blockLossChart
 
-        .col
-          h1 Transactional Loss
-          table.table.table-striped
-            thead
-              tr
-                th.text-right Transaction ID
-                th Irrecoverably Lost
-            tbody
-              each tx in transactions
-                tr
-                  td.text-right
-                    a(href='/transaction/'+tx.tx_hash)= tx.tx_hash.substr(0, 6) + '.....' + tx.tx_hash.substr(tx.tx_hash.length - 6)
-                  td #{helpers.format(tx.loss / 100000000, 8)} BTC
+block javascript
+  script(src='/javascripts/charts.js')
+  script.
+    // Initialize block loss chart if there are transaction losses
+    const transactions = !{JSON.stringify((transactions || []).map(tx => ({
+      txid: tx.tx_hash,
+      lossAmount: tx.loss / 100000000
+    })))};
+
+    if (transactions.length > 0) {
+      BitcoinSupplyCharts.initBlockLossChart('blockLossChart', transactions);
+    }

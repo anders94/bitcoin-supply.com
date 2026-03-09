@@ -2,64 +2,94 @@ doctype html
 html.h-100(lang='en')
 
   head
-    title= title ? title : 'Bitcoin Supply'
+    title= title ? title : 'Bitcoin Supply - Canonical Bitcoin Supply Ledger'
     meta(charset='utf-8')
     meta(name='viewport', content='width=device-width, initial-scale=1, shrink-to-fit=no')
-    meta(name='description', content='Accounting for the supply of bitcoin.')
+    meta(name='description', content='Definitive tracking of Bitcoin supply and provably lost coins through open-source detection protocols.')
     meta(name='author', content='Anders Brownworth')
     meta(name='generator', content='emacs')
     link(rel='apple-touch-icon', href='/images/favicons/apple-touch-icon.png', sizes='180x180')
     link(rel='icon', href='/images/favicons/favicon-32x32.png', sizes='32x32', type='image/png')
     link(rel='icon', href='/images/favicons/favicon-16x16.png', sizes='16x16', type='image/png')
     link(rel='manifest', href='/images/favicons/manifest.json')
-    link(rel='mask-icon', href='/images/favicons/safari-pinned-tab.svg', color='#563d7c')
+    link(rel='mask-icon', href='/images/favicons/safari-pinned-tab.svg', color='#F7931A')
     link(rel='icon', href='/images/favicons/favicon.ico')
     meta(name='msapplication-config', content='/images/favicons/browserconfig.xml')
-    meta(name='theme-color', content='#563d7c')
-    link(rel='stylesheet', href='/stylesheets/lib/bootstrap.min.css')
+    meta(name='theme-color', content='#0F0F0F')
+
+    // Fonts
+    link(rel='preconnect', href='https://fonts.googleapis.com')
+    link(rel='preconnect', href='https://fonts.gstatic.com', crossorigin='')
+    link(href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap', rel='stylesheet')
+
+    // Stylesheets - Bootstrap 5 + Custom
+    link(href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css', rel='stylesheet', integrity='sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN', crossorigin='anonymous')
+    link(rel='stylesheet', href='/stylesheets/design-system.css')
     link(rel='stylesheet', href='/stylesheets/site.css')
-    script(src='/javascripts/lib/jquery-3.5.1.slim.min.js', integrity='sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj')
-    script(src='/javascripts/lib/bootstrap.bundle.min.js')
-    meta(name='twitter:card', content='summary')
+
+    // Chart.js
+    script(src='https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js')
+    // Social Meta Tags
+    meta(name='twitter:card', content='summary_large_image')
     meta(name='twitter:site', content='@supplybitcoin')
     meta(name='twitter:creator', content='@supplybitcoin')
     meta(property='og:url', content='https://bitcoin-supply.com/')
-    meta(property='og:title', content='Bitcoin Supply')
-    meta(property='og:description', content= title ? title : 'Bitcoin Supply')
+    meta(property='og:title', content='Bitcoin Supply - Canonical Bitcoin Supply Ledger')
+    meta(property='og:description', content='Definitive tracking of Bitcoin supply and provably lost coins through open-source detection protocols.')
     meta(property='og:image', content='https://bitcoin-supply.com/img/image.png')
 
-  body.d-flex.flex-column.h-100
+  body.d-flex.flex-column.h-100(data-bs-theme='dark')
+    // Navigation
     header
-      nav.navbar.navbar-expand-md.navbar-dark.fixed-top.bg-dark
-        a.navbar-brand(href='/') Bitcoin Supply
-        button.navbar-toggler(type='button', data-toggle='collapse', data-target='#navbarsExampleDefault', aria-controls='navbarsExampleDefault', aria-expanded='false', aria-label='Toggle navigation')
-          span.navbar-toggler-icon
+      nav.navbar.navbar-expand-md.sticky-top
+        .container-fluid
+          a.navbar-brand(href='/')
+            span Bitcoin Supply
+          button.navbar-toggler(type='button', data-bs-toggle='collapse', data-bs-target='#navbarNav', aria-controls='navbarNav', aria-expanded='false', aria-label='Toggle navigation')
+            span.navbar-toggler-icon
 
-        .collapse.navbar-collapse#navbarsExampleDefault
-          ul.navbar-nav.mr-auto
-            //li.nav-item.active
-            //  a.nav-link(href='#') Home
-            //    span.sr-only (current)
-          form.form-inline.my-2.my-lg-0(action='/search', method='POST')
-            input#search.form-control.mr-sm-2(name='query', type='text', placeholder='Block # / TXID', aria-label='Block number')
-            button.btn.btn-outline-success.my-2.my-sm-0(type='submit') Find
+          #navbarNav.collapse.navbar-collapse
+            ul.navbar-nav.ms-auto.mb-2.mb-lg-0
+              li.nav-item
+                a.nav-link(href='/losses') Loss History
+              li.nav-item
+                a.nav-link(href='https://github.com/anders94/bitcoin-supply.com', target='_blank', rel='noopener') GitHub
+            form.d-flex.search-form(action='/search', method='POST', role='search')
+              input#search.form-control(name='query', type='text', placeholder='Block # / TXID', aria-label='Search')
+              button.btn.btn-outline-success(type='submit') Find
 
+    // Main Content
     main.flex-shrink-0(role='main')
-      block content
-
-    footer.footer.mt-auto.py-3
       .container
-        nav.navbar.fixed-bottom.navbar-dark.bg-dark
-          .navbar-text &copy; #{new Date().getFullYear()} 
-            a.navbar-text(href='/', tabindex=-1) Bitcoin-Supply.com
+        block content
 
+    // Footer
+    footer.footer.mt-auto
+      .container
+        .footer-content
+          .footer-links
+            a(href='/') Home
+            a(href='/losses') Losses
+            a(href='https://github.com/anders94/bitcoin-supply.com', target='_blank', rel='noopener') GitHub
+            a(href='https://github.com/anders94/bitcoin-supply.com#methodology', target='_blank', rel='noopener') Methodology
+          .footer-copyright
+            span &copy; #{new Date().getFullYear()}
+            a(href='/') Bitcoin-Supply.com
+
+  // Bootstrap JS
+  script(src='https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js', integrity='sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL', crossorigin='anonymous')
+
+  // Google Analytics
   script(async, src='https://www.googletagmanager.com/gtag/js?id=G-QR2SXVYGER')
   script.
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
     gtag('config', 'G-QR2SXVYGER');
-    $(() => {
-      $('#search').focus();
+
+    // Focus search on load
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('search')?.focus();
     });
+
   block javascript

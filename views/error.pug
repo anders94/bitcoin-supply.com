@@ -1,10 +1,18 @@
 extends layout
 
 block content
-  .container
-    .card
-      .card-header
-        h1= message
-      .card-body
-        h2= error.status
-        pre #{error.stack}
+  .error-container
+    .error-code= error.status || '404'
+    .error-message= message || 'Whoops! That doesn\'t look right'
+    p.text-secondary.mt-4 The page you're looking for might have been removed, had its name changed, or is temporarily unavailable.
+
+    .mt-5
+      a.btn.btn-primary.me-3(href='/') Return Home
+      a.btn.btn-outline-success(href='/losses') View Losses
+
+    if error.stack
+      .card.mt-5.text-start
+        .card-header
+          h5.mb-0 Error Details
+        .card-body
+          pre.text-xs.mb-0= error.stack
