@@ -12,7 +12,7 @@
 	"user": "bitcoin-supply",
 	"password": { "ENV": "PGPASSWORD" },
 	"host": "localhost",
-	"database": "bitcoin-supply_dev"
+	"database": { "ENV": "PGDATABASE" }
     },
 
     "test": {
