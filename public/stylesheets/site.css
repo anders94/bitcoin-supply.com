@@ -118,21 +118,31 @@ main {
 
 /* Losses Page - Bar Indicator */
 .loss-row {
-  position: relative;
   transition: all var(--transition);
-  border-bottom: 4px solid transparent;
-  border-image: linear-gradient(
-    to right,
-    var(--danger) 0%,
-    var(--danger) var(--loss-bar-width, 0%),
-    transparent var(--loss-bar-width, 0%),
-    transparent 100%
-  ) 1;
-  box-shadow: 0 4px 8px -4px rgba(239, 68, 68, 0.5);
 }
 
-.loss-row:hover {
-  box-shadow: 0 4px 12px -4px rgba(239, 68, 68, 0.7);
+.loss-bar-row {
+  height: 4px;
+  background: transparent;
+}
+
+.loss-bar-row td {
+  padding: 0 !important;
+  border: none !important;
+  background: transparent;
+}
+
+.loss-bar {
+  height: 4px;
+  background: var(--danger);
+  border-radius: 0 2px 2px 0;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+  transition: width 0.6s ease-out;
+  margin: 0;
+}
+
+.loss-row:hover + .loss-bar-row .loss-bar {
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.7);
 }
 
 /* Halving Schedule */
