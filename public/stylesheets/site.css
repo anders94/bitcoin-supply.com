@@ -116,13 +116,27 @@ main {
   font-weight: 600;
 }
 
-/* Losses Page - Intensity Backgrounds */
+/* Losses Page - Bar Indicator */
 .loss-row {
+  position: relative;
   transition: all var(--transition);
 }
 
-.loss-row:hover {
-  transform: translateX(4px);
+.loss-row::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  width: var(--loss-bar-width, 0%);
+  background: var(--danger);
+  border-radius: 0 2px 2px 0;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+  transition: width 0.6s ease-out;
+}
+
+.loss-row:hover::after {
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.7);
 }
 
 /* Halving Schedule */

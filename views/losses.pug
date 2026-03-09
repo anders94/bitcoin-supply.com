@@ -39,13 +39,13 @@ block content
               -   var maxAmount = 1.0
               -   var clampedValue = Math.max(minAmount, Math.min(maxAmount, lostBTC))
               -   var logRatio = Math.log10(clampedValue / minAmount) / Math.log10(maxAmount / minAmount)
-              -   redIntensity = 0.1 + (logRatio * 0.7)
+              -   redIntensity = 0.05 + (logRatio * 0.95)
               -   if (lostBTC > 1.0) {
-              -     redIntensity = 0.8
+              -     redIntensity = 1.0
               -   }
               - }
-              - var bgColor = redIntensity > 0 ? `rgba(239, 68, 68, ${redIntensity})` : 'transparent'
-              tr.loss-row(style=`background-color: ${bgColor};`)
+              - var barWidth = redIntensity > 0 ? `${redIntensity * 100}%` : '0%'
+              tr.loss-row(style=`--loss-bar-width: ${barWidth};`)
                 td
                   span.text-muted ##{helpers.format(page*paginationSize+index+1)}
                 td.text-end
