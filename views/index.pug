@@ -12,22 +12,17 @@ block content
       |
       | BTC
     p.text-secondary.mb-4
-      | Circulating Supply • Block
+      | Circulating Supply • Block #{' '}
       a(href='/block/'+block.block_number).text-orange.block-number= helpers.format(block.block_number)
 
-    // Progress Bar
-    .supply-progress-container
-      .supply-progress-label
-        span Released
-        span.supply-progress-value #{((block.current_total_supply/total_possible_supply)*100).toFixed(3)}%
-      .progress
-        .progress-bar(role='progressbar', style=`width: ${((block.current_total_supply/total_possible_supply)*100).toFixed(3)}%`, aria-valuenow=((block.current_total_supply/total_possible_supply)*100).toFixed(3), aria-valuemin='0', aria-valuemax='100')
-
   // Key Metrics Grid
-  .metrics-grid
+  .metrics-grid.metrics-grid-two-column
     .metric-card
       .metric-value.btc-amount #{helpers.format(total_possible_supply/100000000000000, 4)}M
       .metric-label Total Expected Supply
+    .metric-card
+      .metric-value.text-orange #{((block.current_total_supply/total_possible_supply)*100).toFixed(3)}%
+      .metric-label Released
     .metric-card
       .metric-value.text-danger.btc-amount #{helpers.format(total_lost/100000000, 4)}
       .metric-label Permanently Lost
@@ -43,7 +38,7 @@ block content
   .card.mb-4
     .card-header
       h3.mb-0
-        | Block
+        | Block #{' '}
         a(href='/block/'+block.block_number).text-orange.block-number= helpers.format(block.block_number)
     .card-body
       .row

@@ -328,6 +328,16 @@ a:hover {
   margin-bottom: var(--space-8);
 }
 
+.metrics-grid-two-column {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (max-width: 768px) {
+  .metrics-grid-two-column {
+    grid-template-columns: 1fr;
+  }
+}
+
 .metric-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
