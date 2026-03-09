@@ -1,50 +1,89 @@
 extends layout
 
 block content
-  main(role='main')
-    .jumbotron
-      .container
-        .card
-          .card-header
-            h3 Transaction
-          .card-body
-            ul.list-group.list-group-flush
-              li.list-group-item Hash: #{transaction.tx_hash}
-              li.list-group-item Block: 
-                a(href='/block/'+transaction.block_number)= helpers.format(transaction.block_number)
-              if transaction.is_coinbase
-                li.list-group-item Coinbase Transaction
-              li.list-group-item Input Value: #{helpers.format(transaction.input_value / 100000000, 8)} BTC
-              li.list-group-item Output Value: #{helpers.format(transaction.output_value / 100000000, 8)} BTC
-              li.list-group-item Fee: #{transaction.fee}
-    .container
-      .row
-        .col
-          h4 Inputs
-          each input in inputs
-            .card
-              .card-header
-                h4= input.input_index
-              .card-body
-                ul.list-group.list-group-flush
-                  li.list-group-item Value: #{helpers.format(input.input_value / 100000000, 8)} BTC
-                  li.list-group-item Script: #{helpers.limit(input.script_asm, 32)}
-                  li.list-group-item Addresses: #{input.addresses}
-            | &nbsp;
-        .col
-          h4 Outputs
-          each output in outputs
-            .card
-              .card-header
-                h4= output.output_index
-              .card-body
-                ul.list-group.list-group-flush
-                  if output.supply_loss
-                    li.list-group-item.list-group-item-danger Value: #{helpers.format(output.output_value / 100000000, 8)} BTC
-                    li.list-group-item.list-group-item-danger Script: #{helpers.limit(output.script_asm, 32)}
-                    li.list-group-item.list-group-item-danger Addresses: #{output.addresses}
-                  else
-                    li.list-group-item Value: #{helpers.format(output.output_value / 100000000, 8)} BTC
-                    li.list-group-item Script: #{output.script_asm}
-                    li.list-group-item Addresses: #{output.addresses}
-            | &nbsp;
+  // Transaction Header Card
+  .card.mb-4
+    .card-header
+      .d-flex.justify-content-between.align-items-start.flex-wrap
+        div
+          h2.mb-2 Transaction
+          if transaction.is_coinbase
+            span.badge.badge-warning Coinbase Transaction
+        div
+          a.btn.btn-sm.btn-outline-success(href='/block/'+transaction.block_number)
+            | Block #{helpers.format(transaction.block_number)}
+    .card-body
+      .mb-3
+        .metric-label Transaction Hash
+        .hash-display.mt-2
+          code #{transaction.tx_hash}
+
+      .row.mt-4
+        .col-md-4.mb-3
+          .metric-label Total Input Value
+          .btc-amount.text-orange #{helpers.format(transaction.input_value / 100000000, 8)} BTC
+        .col-md-4.mb-3
+          .metric-label Total Output Value
+          .btc-amount.text-orange #{helpers.format(transaction.output_value / 100000000, 8)} BTC
+        .col-md-4.mb-3
+          .metric-label Fee
+          .btc-amount #{transaction.fee || '0.00000000'} BTC
+
+  // Transaction Flow Chart
+  .chart-container
+    canvas#transactionFlowChart
+
+  // Inputs and Outputs
+  .row
+    .col-lg-6.mb-4
+      .card
+        .card-header
+          h4.mb-0 Inputs (#{inputs.length})
+        .card-body
+          each input, idx in inputs
+            .io-card
+              .io-card-header
+                | Input ##{input.input_index}
+              .io-item
+                span.text-secondary Value
+                span.io-value #{helpers.format(input.input_value / 100000000, 8)} BTC
+              .io-item
+                span.text-secondary Script
+                span.text-mono.text-sm #{helpers.limit(input.script_asm, 40)}
+              if input.addresses
+                .io-item
+                  span.text-secondary Addresses
+                  span.text-mono.text-sm #{input.addresses}
+
+    .col-lg-6.mb-4
+      .card
+        .card-header
+          h4.mb-0 Outputs (#{outputs.length})
+        .card-body
+          each output, idx in outputs
+            .io-card(class=output.supply_loss ? 'tx-loss-indicator' : '')
+              .io-card-header
+                | Output ##{output.output_index}
+                if output.supply_loss
+                  |
+                  span.badge.badge-danger.ms-2 Loss
+              .io-item
+                span.text-secondary Value
+                span.io-value(class=output.supply_loss ? 'text-danger' : '') #{helpers.format(output.output_value / 100000000, 8)} BTC
+              .io-item
+                span.text-secondary Script
+                span.text-mono.text-sm #{output.script_asm}
+              if output.addresses
+                .io-item
+                  span.text-secondary Addresses
+                  span.text-mono.text-sm #{output.addresses}
+
+block javascript
+  script(src='/javascripts/charts.js')
+  script.
+    // Initialize transaction flow chart
+    const inputValue = #{transaction.input_value / 100000000};
+    const outputValue = #{transaction.output_value / 100000000};
+    const feeValue = #{transaction.fee || 0};
+
+    BitcoinSupplyCharts.initTransactionFlowChart('transactionFlowChart', inputValue, outputValue, feeValue);

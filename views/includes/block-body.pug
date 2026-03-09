@@ -1,25 +1,42 @@
-ul.list-group.list-group-flush
-  li.list-group-item New Supply This Block: #{helpers.format(block.allowed_supply/100000000, 8)} BTC
+.card-body
+  .row.mb-4
+    .col-md-4.mb-3
+      .metric-label New Supply This Block
+      .btc-amount.text-orange #{helpers.format(block.allowed_supply/100000000, 8)} BTC
+    if block.fee_sum
+      .col-md-4.mb-3
+        .metric-label Total Supply (as of this block)
+        .btc-amount.text-orange #{helpers.format(block.current_total_supply/100000000, 8)} BTC
+      .col-md-4.mb-3
+        .metric-label Blocks Till Halving
+        .btc-amount #{helpers.format(block.blocks_till_halving, 0)}
+
   if block.fee_sum
-    if block.miner_loss != 0
-      li.list-group-item.list-group-item-danger Miner Loss: #{helpers.format(block.miner_loss/100000000, 8)} BTC
-    else
-      li.list-group-item Miner Loss: #{helpers.format(block.miner_loss/100000000, 8)} BTC
-    if block.transactional_loss != 0
-      li.list-group-item.list-group-item-danger Transactional Loss: #{helpers.format(block.transactional_loss/100000000, 8)} BTC
-    else
-      li.list-group-item Transactional Loss: #{helpers.format(block.transactional_loss/100000000, 8)} BTC
-    li.list-group-item Total Supply as of This Block: #{helpers.format(block.current_total_supply/100000000, 8)} BTC
-    li.list-group-item Blocks Till Halving: #{helpers.format(block.blocks_till_halving, 0)}
-    li.list-group-item Transactions in this Block: #{block.transaction_count}
-    li.list-group-item Inputs #{helpers.format(block.input_sum/100000000, 8)} BTC
-    li.list-group-item Outputs #{helpers.format(block.output_sum/100000000, 8)} BTC
-    li.list-group-item Fees #{helpers.format(block.fee_sum/100000000, 8)} BTC
-  li.list-group-item
-    .row
-      .col
-        a.btn.btn-primary(href='/block/'+(Number(block.block_number)-1)) &lt;&lt; Previous Block
-      .col.text-center
-        a.btn.btn-primary(href='/current') Latest Block
-      .col.text-right
-        a.btn.btn-primary(href='/block/'+(Number(block.block_number)+1)) Next Block &gt;&gt;
+    .row.mb-4
+      if block.miner_loss != 0
+        .col-md-6.mb-3
+          .metric-label Miner Loss
+          .btc-amount.text-danger #{helpers.format(block.miner_loss/100000000, 8)} BTC
+      if block.transactional_loss != 0
+        .col-md-6.mb-3
+          .metric-label Transactional Loss
+          .btc-amount.text-danger #{helpers.format(block.transactional_loss/100000000, 8)} BTC
+
+    .row.mb-4
+      .col-md-3.mb-3
+        .metric-label Transactions
+        .text-mono #{block.transaction_count}
+      .col-md-3.mb-3
+        .metric-label Total Inputs
+        .btc-amount #{helpers.format(block.input_sum/100000000, 8)} BTC
+      .col-md-3.mb-3
+        .metric-label Total Outputs
+        .btc-amount #{helpers.format(block.output_sum/100000000, 8)} BTC
+      .col-md-3.mb-3
+        .metric-label Total Fees
+        .btc-amount #{helpers.format(block.fee_sum/100000000, 8)} BTC
+
+  .block-nav
+    a.btn.btn-primary(href='/block/'+(Number(block.block_number)-1)) ← Previous
+    a.btn.btn-outline-success(href='/current') Latest
+    a.btn.btn-primary(href='/block/'+(Number(block.block_number)+1)) Next →

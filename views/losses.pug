@@ -1,93 +1,96 @@
 extends layout
 
 block content
-  .container
-    h1 Bitcoin Supply Losses
-    nav(aria-label='Page navigation')
-      ul.pagination.justify-content-center
-        if page == 0
-          li.page-item.disabled
-            a.page-link(href='/losses/0', tabindex=-1) &lt;&lt;
-        else
-          li.page-item
-            a.page-link(href='/losses/'+(page-1), tabindex=-1) &lt;&lt;
-        - let p = 0
-        - let etc = false
-        while p < total/paginationSize
-          if p == page
-            li.page-item.disabled
-              a.page-link(href='/losses/'+p) #{p+1}
-          else if p < 2 || p > Math.floor(total/paginationSize)-2 || p >= page-3 && p <= Number(page)+3
-            - etc = false
-            li.page-item
-              a.page-link(href='/losses/'+p) #{p+1}
-          else if !etc
-            - etc = true
-            li.page-item.disabled
-              a.page-link(href='/losses/'+p) ...
-          - p++
-        if page == Math.floor(total/paginationSize)
-          li.page-item.disabled
-            a.page-link(href='/losses/0', tabindex=-1) &gt;&gt;
-        else
-          li.page-item
-            a.page-link(href='/losses/'+(Number(page)+1), tabindex=-1) &gt;&gt;
+  // Page Header
+  .card.mb-4
+    .card-header
+      h1.mb-2 Bitcoin Supply Loss History
+      p.text-secondary.mb-0
+        | Complete record of permanently lost bitcoin • Showing page #{page + 1} of #{Math.floor(total/paginationSize) + 1}
 
-    table.table.table-striped
-      thead
-        tr
-          th
-          th.text-center Block
-          th.text-center Irrecoverably Lost
-          th.text-center Date
-      tbody
-        each block, index in losses
-          - var lostBTC = (block.allowed_supply - block.new_supply) / 100000000
-          - var redIntensity = 0
-          - if (lostBTC > 0) {
-          -   var minAmount = 0.0000001
-          -   var maxAmount = 1.0  // 1 BTC gets maximum red
-          -   var clampedValue = Math.max(minAmount, Math.min(maxAmount, lostBTC))
-          -   var logRatio = Math.log10(clampedValue / minAmount) / Math.log10(maxAmount / minAmount)
-          -   redIntensity = 0.1 + (logRatio * 0.8)
-          -   if (lostBTC > 1.0) {
-          -     redIntensity = 0.9
-          -   }
-          - }
-          - var bgColor = redIntensity > 0 ? `rgba(220, 53, 69, ${redIntensity})` : 'transparent'
-          tr(style=`background-color: ${bgColor};`)
-            th ##{helpers.format(page*paginationSize+index+1)}
-            td.text-center
-              a(href='/block/'+block.block_number)= helpers.format(block.block_number)
-            td.text-center #{helpers.format(lostBTC, 8)} BTC
-            td.text-center #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')}
+  // Loss Distribution Chart (if on first page)
+  if page == 0
+    .chart-container
+      canvas#lossDistributionChart
 
-    nav(aria-label='Page navigation')
-      ul.pagination.justify-content-center
-        if page == 0
-          li.page-item.disabled
-            a.page-link(href='/losses/0', tabindex=-1) &lt;&lt;
-        else
+  // Loss Legend
+  .loss-legend
+    span.text-secondary Color Intensity:
+    .loss-legend-gradient
+    span.text-secondary Darker = Larger Loss
+
+  // Loss Table Card
+  .card.mb-4
+    .card-body.p-0
+      .table-responsive
+        table.table.table-hover.table-sticky-header.mb-0
+          thead
+            tr
+              th #
+              th.text-end Block
+              th.text-end Permanently Lost
+              th Date
+          tbody
+            each block, index in losses
+              - var lostBTC = (block.allowed_supply - block.new_supply) / 100000000
+              - var redIntensity = 0
+              - if (lostBTC > 0) {
+              -   var minAmount = 0.0000001
+              -   var maxAmount = 1.0
+              -   var clampedValue = Math.max(minAmount, Math.min(maxAmount, lostBTC))
+              -   var logRatio = Math.log10(clampedValue / minAmount) / Math.log10(maxAmount / minAmount)
+              -   redIntensity = 0.1 + (logRatio * 0.7)
+              -   if (lostBTC > 1.0) {
+              -     redIntensity = 0.8
+              -   }
+              - }
+              - var bgColor = redIntensity > 0 ? `rgba(239, 68, 68, ${redIntensity})` : 'transparent'
+              tr.loss-row(style=`background-color: ${bgColor};`)
+                td
+                  span.text-muted ##{helpers.format(page*paginationSize+index+1)}
+                td.text-end
+                  a(href='/block/'+block.block_number).block-number= helpers.format(block.block_number)
+                td.text-end.btc-amount #{helpers.format(lostBTC, 8)} BTC
+                td.timestamp #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')}
+
+  // Pagination
+  nav(aria-label='Page navigation')
+    ul.pagination.justify-content-center
+      if page == 0
+        li.page-item.disabled
+          a.page-link(href='/losses/0', tabindex=-1, aria-label='Previous') ← Previous
+      else
+        li.page-item
+          a.page-link(href='/losses/'+(page-1), tabindex=-1, aria-label='Previous') ← Previous
+
+      - let p = 0
+      - let etc = false
+      while p < total/paginationSize
+        if p == page
+          li.page-item.active
+            a.page-link(href='/losses/'+p) #{p+1}
+        else if p < 2 || p > Math.floor(total/paginationSize)-2 || p >= page-3 && p <= Number(page)+3
+          - etc = false
           li.page-item
-            a.page-link(href='/losses/'+(page-1), tabindex=-1) &lt;&lt;
-        - p = 0
-        - etc = false
-        while p < total/paginationSize
-          if p == page
-            li.page-item.disabled
-              a.page-link(href='/losses/'+p) #{p+1}
-          else if p < 2 || p > Math.floor(total/paginationSize)-2 || p >= page-3 && p <= Number(page)+3
-            - etc = false
-            li.page-item
-              a.page-link(href='/losses/'+p) #{p+1}
-          else if !etc
-            - etc = true
-            li.page-item.disabled
-              a.page-link(href='/losses/'+p) ...
-          - p++
-        if page == Math.floor(total/paginationSize)
+            a.page-link(href='/losses/'+p) #{p+1}
+        else if !etc
+          - etc = true
           li.page-item.disabled
-            a.page-link(href='/losses/0', tabindex=-1) &gt;&gt;
-        else
-          li.page-item
-            a.page-link(href='/losses/'+(Number(page)+1), tabindex=-1) &gt;&gt;
+            a.page-link(href='/losses/'+p) ...
+        - p++
+
+      if page == Math.floor(total/paginationSize)
+        li.page-item.disabled
+          a.page-link(href='/losses/0', tabindex=-1, aria-label='Next') Next →
+      else
+        li.page-item
+          a.page-link(href='/losses/'+(Number(page)+1), tabindex=-1, aria-label='Next') Next →
+
+block javascript
+  script(src='/javascripts/charts.js')
+  script.
+    // Initialize loss distribution chart (only on first page)
+    if (#{page} === 0) {
+      const lossAmounts = !{JSON.stringify(losses.map(b => (b.allowed_supply - b.new_supply) / 100000000))};
+      BitcoinSupplyCharts.initLossDistributionChart('lossDistributionChart', lossAmounts);
+    }

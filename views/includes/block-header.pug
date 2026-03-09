@@ -1,4 +1,16 @@
-h2 Block #{helpers.format(block.block_number)}
-p Mined #{new Date(block.block_timestamp).toLocaleDateString('en-us', {year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', timeZone: 'utc'})} UTC
-  if moment().isAfter(block.block_timestamp)
-    |  (#{moment(block.block_timestamp).from()})
+.d-flex.justify-content-between.align-items-start.flex-wrap
+  div
+    h2.block-header-title.mb-2
+      span.text-secondary Block
+      |
+      span.block-number #{helpers.format(block.block_number)}
+    p.timestamp.mb-0
+      | Mined #{new Date(block.block_timestamp).toLocaleDateString('en-us', {year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', timeZone: 'utc'})} UTC
+      if moment().isAfter(block.block_timestamp)
+        |
+        span.timestamp-relative (#{moment(block.block_timestamp).from()})
+  div
+    if block.allowed_supply != block.new_supply
+      span.badge.badge-danger Loss Detected
+    else
+      span.badge.badge-success No Loss

@@ -1,266 +1,284 @@
 extends layout
 
 block content
-  .jumbotron
-    .container
+  // Hero Section
+  .hero.fade-in
+    .hero-subtitle CANONICAL BITCOIN SUPPLY LEDGER
+    .hero-title.btc-amount #{helpers.format(block.current_total_supply/100000000, 8)} BTC
+    p.text-secondary.mb-4
+      | Circulating Supply • Block
+      a(href='/block/'+block.block_number).text-orange.block-number= helpers.format(block.block_number)
+
+    // Progress Bar
+    .supply-progress-container
+      .supply-progress-label
+        span Released
+        span.supply-progress-value #{((block.current_total_supply/total_possible_supply)*100).toFixed(3)}%
+      .progress
+        .progress-bar(role='progressbar', style=`width: ${((block.current_total_supply/total_possible_supply)*100).toFixed(3)}%`, aria-valuenow=((block.current_total_supply/total_possible_supply)*100).toFixed(3), aria-valuemin='0', aria-valuemax='100')
+
+  // Key Metrics Grid
+  .metrics-grid
+    .metric-card
+      .metric-value.btc-amount #{helpers.format(total_possible_supply/100000000000000, 4)}M
+      .metric-label Total Expected Supply
+    .metric-card
+      .metric-value.text-danger.btc-amount #{helpers.format(total_lost/100000000, 4)}
+      .metric-label Permanently Lost
+    .metric-card
+      .metric-value.btc-amount #{helpers.format(block.blocks_till_halving, 0)}
+      .metric-label Blocks Till Halving
+
+  // Supply Progress Chart
+  .chart-container
+    canvas#supplyProgressChart
+
+  // Current Block Info Card
+  .card.mb-4
+    .card-header
+      h3.mb-0
+        | Block
+        a(href='/block/'+block.block_number).text-orange.block-number= helpers.format(block.block_number)
+    .card-body
       .row
-        .col
-          .card
-            .card-header
-              h2 #{helpers.format(block.current_total_supply/100000000, 8)} BTC
-              p Current Supply
-            .card-body
-              h4 #{helpers.format(total_possible_supply/100000000000000, 4)} Million BTC
-              p Total Expected Supply
-              h4 #{((block.current_total_supply/total_possible_supply)*100).toFixed(3)}%
-              p Amount of Total Expected Supply Released
-              h4 #{helpers.format(total_lost/100000000, 8)} BTC
-              p Permanently Lost
-        .col
-          .card
-            .card-header
-              h2 Block 
-                a(href='/block/'+block.block_number)= helpers.format(block.block_number)
-              p Mined #{new Date(block.block_timestamp).toLocaleDateString('en-us', {year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', timeZone: 'utc'})} UTC
-            ul.list-group.list-group-flush
-              li.list-group-item New Supply This Block: #{helpers.format(block.allowed_supply/100000000, 8)} BTC
-              if block.miner_loss != 0
-                li.list-group-item.list-group-item-danger Miner Loss: #{helpers.format(block.miner_loss/100000000, 8)} BTC
-              else
-                li.list-group-item Miner Loss: #{helpers.format(block.miner_loss/100000000, 8)} BTC
-              if block.transactional_loss != 0
-                li.list-group-item.list-group-item-danger Transactional Loss: #{helpers.format(block.transactional_loss/100000000, 8)} BTC
-              else
-                li.list-group-item Transactional Loss: #{helpers.format(block.transactional_loss/100000000, 8)} BTC
-              li.list-group-item Blocks Till Halving: #{helpers.format(block.blocks_till_halving, 0)}
-              li.list-group-item
-                .row
-                  .col
-                    a.btn.btn-primary(href='/block/'+(Number(block.block_number)-1)) &lt;&lt; Previous Block
+        .col-md-6.mb-3
+          .metric-label New Supply This Block
+          .btc-amount.text-orange #{helpers.format(block.allowed_supply/100000000, 8)} BTC
+        .col-md-6.mb-3
+          .metric-label Timestamp
+          .timestamp #{new Date(block.block_timestamp).toLocaleDateString('en-us', {year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', timeZone: 'utc'})} UTC
+        if block.miner_loss != 0
+          .col-md-6.mb-3
+            .metric-label Miner Loss
+            .btc-amount.text-danger #{helpers.format(block.miner_loss/100000000, 8)} BTC
+        if block.transactional_loss != 0
+          .col-md-6.mb-3
+            .metric-label Transactional Loss
+            .btc-amount.text-danger #{helpers.format(block.transactional_loss/100000000, 8)} BTC
+      .mt-3
+        a.btn.btn-primary(href='/block/'+(Number(block.block_number)-1)) ← Previous Block
+        |
+        a.btn.btn-outline-success(href='/block/'+block.block_number) View Block Details →
 
-    .container
-      p We're tracking provably lost bitcoin through <a href="https://github.com/anders94/bitcoin-supply.com/blob/main/detectors/index.js">publicly available logic</a>. Discussion about <a href="https://github.com/anders94/bitcoin-supply.com/tree/main/proposals">proposals</a> for this logic happens in GitHub <a href="https://github.com/anders94/bitcoin-supply.com/issues">issues</a> and are added and amended via <a href="https://github.com/anders94/bitcoin-supply.com/pulls">pull requests</a>.
-      p Coin is provably lost several ways. It can be lost by miners not accepting all available rewards. For example, in block <a href="/block/501726">501,726</a> the miner didn't accept the 12.5 BTC block reward. Coin is also provably lost by users creating transactions which cause resulting coin to be unspendable. For example, the now defunct MtGox exchange made <a href="/transaction/03acfae47d1e0b7674f1193237099d1553d3d8a93ecc85c18c4bec37544fe386">497 BTC unspendable</a> amongst a set of <a href="/block/150951">malformed transactions</a>. Bitcoin can also be lost in more esoteric ways due to quirks of the underlying software such as the coinbase reward in the first block which is unspendable, although these remain rare.
+  // Loss Timeline Chart
+  .chart-container
+    canvas#lossTimelineChart
 
-  .container
-    .row
-      .col
-        h1 Latest Losses
-        table.table.table-striped
+  // Latest Activity Section
+  .row.mt-4
+    .col-lg-6.mb-4
+      .card
+        .card-header
+          h3.mb-0 Recent Supply Losses
+        .card-body.p-0
+          .table-responsive
+            table.table.table-hover.mb-0
+              thead
+                tr
+                  th.text-end Block
+                  th Permanently Lost
+                  th When
+              tbody
+                each loss_block in latest_losses
+                  tr
+                    td.text-end
+                      a(href='/block/'+loss_block.block_number).block-number= helpers.format(loss_block.block_number)
+                    td.btc-amount.text-danger #{helpers.format((loss_block.allowed_supply - loss_block.new_supply) / 100000000, 8)} BTC
+                    td
+                      span.timestamp.d-inline-block(tabindex=0, data-bs-toggle='tooltip', data-bs-placement='top', title=moment(loss_block.block_timestamp).format('YYYY-MM-DD HH:mm:ss'))= moment(loss_block.block_timestamp).from()
+        .card-body.text-center.border-top
+          a.btn.btn-sm.btn-outline-success(href='/losses') View Complete Loss History →
+
+    .col-lg-6.mb-4
+      .card
+        .card-header
+          h3.mb-0 Largest Supply Events
+        .card-body.p-0
+          .table-responsive
+            table.table.table-hover.mb-0
+              thead
+                tr
+                  th.text-end Block
+                  th Permanently Lost
+                  th Date
+              tbody
+                each loss_block in biggest_losses
+                  tr
+                    td.text-end
+                      a(href='/block/'+loss_block.block_number).block-number= helpers.format(loss_block.block_number)
+                    td.btc-amount.text-danger #{helpers.format((loss_block.allowed_supply - loss_block.new_supply) / 100000000, 8)} BTC
+                    td.timestamp #{moment(loss_block.block_timestamp).format('YYYY-MM-DD')}
+
+  // Halving Schedule
+  .card.mb-4
+    .card-header
+      h3.mb-0 Halving Schedule
+    .card-body.p-0
+      .table-responsive
+        table.table.table-hover.mb-0.halving-table
           thead
             tr
-              th.text-right Block
-              th Irrecoverably Lost
-              th When
-          tbody
-            each block in latest_losses
-              tr
-                td.text-right
-                  a(href='/block/'+block.block_number) #{helpers.format(block.block_number)}
-                td #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC
-                td
-                  span.d-inline-block(tabindex=0, data-bs-toggle='tooltip', data-bs-placement='top', title=moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss'))= moment(block.block_timestamp).from()
-            tr
-              td.text-right(colspan=3)
-                a.btn.btn-primary(href='/losses') Full List &gt;&gt;
-        h1 Biggest Losses
-        table.table.table-striped
-          thead
-            tr
-              th.text-right Block
-              th Irrecoverably Lost
-              th Date
-          tbody
-            each block in biggest_losses
-              tr
-                td.text-right
-                  a(href='/block/'+block.block_number) #{helpers.format(block.block_number)}
-                td #{helpers.format((block.allowed_supply - block.new_supply) / 100000000, 8)} BTC
-                td #{moment(block.block_timestamp).format('YYYY-MM-DD HH:mm:ss')}
-
-      .col
-        h1 Halvings
-        table.table.table-striped
-          thead
-            tr
-              th.text-right Block
+              th.text-end Block
               th Supply Per Block
               th Date
+              th Status
           tbody
-            tr
-              td.text-right
-                a(href='/block/0') 0
-              td 50.00000000 BTC
-              td 2009-01-03 18:15:05
-            tr
-              td.text-right
-                a(href='/block/210000') 210,000
-              td 25.00000000 BTC
-              td 2012-11-28 15:24:38
-            tr
-              td.text-right
-                a(href='/block/420000') 420,000
-              td 12.50000000 BTC
-              td 2016-07-09 16:46:13
-            tr
-              td.text-right
-                a(href='/block/630000') 630,000
-              td 6.25000000 BTC
-              td 2020-05-11 19:23:43
-            tr
-              td.text-right
-                a(href='/block/840000') 840,000
-              td 3.12500000 BTC
-              td 2024-04-20 00:09:27
-            tr
-              td.text-right
-                a(href='/block/1050000') 1,050,000
-              td 1.56250000 BTC
+            tr.halving-complete
+              td.text-end
+                a(href='/block/0').block-number 0
+              td.btc-amount 50.00000000 BTC
+              td 2009-01-03
               td
-            tr
-              td.text-right
-                a(href='/block/1260000') 1,260,000
-              td 0.78125000 BTC
+                span.badge.badge-success Complete
+            tr.halving-complete
+              td.text-end
+                a(href='/block/210000').block-number 210,000
+              td.btc-amount 25.00000000 BTC
+              td 2012-11-28
               td
-            tr
-              td.text-right
-                a(href='/block/1470000') 1,470,000
-              td 0.39062500 BTC
+                span.badge.badge-success Complete
+            tr.halving-complete
+              td.text-end
+                a(href='/block/420000').block-number 420,000
+              td.btc-amount 12.50000000 BTC
+              td 2016-07-09
               td
-            tr
-              td.text-right
-                a(href='/block/1680000') 1,680,000
-              td 0.19531250 BTC
+                span.badge.badge-success Complete
+            tr.halving-complete
+              td.text-end
+                a(href='/block/630000').block-number 630,000
+              td.btc-amount 6.25000000 BTC
+              td 2020-05-11
               td
-            tr
-              td.text-right
-                a(href='/block/1890000') 1,890,000
-              td 0.09765625 BTC
+                span.badge.badge-success Complete
+            tr.halving-complete
+              td.text-end
+                a(href='/block/840000').block-number 840,000
+              td.btc-amount 3.12500000 BTC
+              td 2024-04-20
               td
-            tr
-              td.text-right
-                a(href='/block/2100000') 2,100,000
-              td 0.04882812 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/2310000') 2,310,000
-              td 0.02441406 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/2520000') 2,520,000
-              td 0.01220703 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/2730000') 2,730,000
-              td 0.00610351 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/2940000') 2,940,000
-              td 0.00305175 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/3150000') 3,150,000
-              td 0.00152587 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/3360000') 3,360,000
-              td 0.00076293 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/3570000') 3,570,000
-              td 0.00038146 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/3780000') 3,780,000
-              td 0.00019073 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/3990000') 3,990,000
-              td 0.00009536 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/4200000') 4,200,000
-              td 0.00004768 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/4410000') 4,410,000
-              td 0.00002384 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/4620000') 4,620,000
-              td 0.00001192 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/4830000') 4,830,000
-              td 0.00000596 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/5040000') 5,040,000
-              td 0.00000298 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/5250000') 5,250,000
-              td 0.00000149 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/5460000') 5,460,000
-              td 0.00000074 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/5670000') 5,670,000
-              td 0.00000037 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/5880000') 5,880,000
-              td 0.00000018 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/6090000') 6,090,000
-              td 0.00000009 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/6300000') 6,300,000
-              td 0.00000004 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/6510000') 6,510,000
-              td 0.00000002 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/6720000') 6,720,000
-              td 0.00000001 BTC
-              td
-            tr
-              td.text-right
-                a(href='/block/6930000') 6,930,000
-              td 0.00000000 BTC
-              td
+                span.badge.badge-success Complete
+            tbody#halvingExpanded.collapsible-content
+              tr.halving-future
+                td.text-end
+                  a(href='/block/unmined/1050000').block-number 1,050,000
+                td.btc-amount 1.56250000 BTC
+                td
+                  span.text-muted ~2028
+                td
+                  span.badge.badge-warning Pending
+              tr.halving-future
+                td.text-end
+                  a(href='/block/unmined/1260000').block-number 1,260,000
+                td.btc-amount 0.78125000 BTC
+                td
+                  span.text-muted ~2032
+                td
+                  span.badge.badge-warning Pending
+              tr.halving-future
+                td.text-end
+                  a(href='/block/unmined/1470000').block-number 1,470,000
+                td.btc-amount 0.39062500 BTC
+                td
+                  span.text-muted ~2036
+                td
+                  span.badge.badge-warning Pending
+              tr.halving-future
+                td.text-end
+                  a(href='/block/unmined/1680000').block-number 1,680,000
+                td.btc-amount 0.19531250 BTC
+                td
+                  span.text-muted ~2040
+                td
+                  span.badge.badge-warning Pending
+              tr.halving-future
+                td.text-end
+                  a(href='/block/unmined/1890000').block-number 1,890,000
+                td.btc-amount 0.09765625 BTC
+                td
+                  span.text-muted ~2044
+                td
+                  span.badge.badge-warning Pending
+              tr.halving-future
+                td.text-end.text-muted 2,100,000+
+                td.btc-amount.text-muted < 0.05 BTC
+                td.text-muted 2048+
+                td
+                  span.badge.badge-warning Pending
+    .card-body.text-center.border-top
+      a.collapse-toggle#halvingToggle(onclick='toggleHalvings()')
+        span#halvingToggleText ▼ Show All Future Halvings
+
+  // Methodology Section
+  .card.mb-4
+    .card-header
+      h3.mb-0 Methodology
+      .text-secondary.mt-2.text-sm
+        span.badge.badge-success.me-2 Open Source
+        span.badge.badge-success.me-2 Auditable
+        span.badge.badge-success Transparent
+    .card-body
+      p
+        strong Bitcoin Supply tracks provably lost bitcoin through open-source detection protocols.
+        | All loss determinations follow
+        a(href='https://github.com/anders94/bitcoin-supply.com/blob/main/detectors/index.js', target='_blank', rel='noopener') publicly documented logic
+        | . Protocol discussions occur in GitHub
+        a(href='https://github.com/anders94/bitcoin-supply.com/issues', target='_blank', rel='noopener') issues
+        | , with changes implemented through auditable
+        a(href='https://github.com/anders94/bitcoin-supply.com/pulls', target='_blank', rel='noopener') pull requests
+        | .
+
+      p.mb-0
+        | Bitcoin can be permanently lost through several mechanisms:
+        strong unclaimed miner rewards
+        | (e.g.,
+        a(href='/block/501726') block 501,726
+        |  where 12.5 BTC went unclaimed),
+        strong unspendable transaction outputs
+        | (e.g.,
+        a(href='/transaction/03acfae47d1e0b7674f1193237099d1553d3d8a93ecc85c18c4bec37544fe386') 497 BTC made unspendable
+        |  by the defunct MtGox exchange in
+        a(href='/block/150951') block 150,951
+        | ), and
+        strong protocol-level anomalies
+        | (e.g., the unspendable genesis block coinbase). All losses are cryptographically verifiable and irreversible.
 
 block javascript
+  script(src='/javascripts/charts.js')
   script.
+    // Initialize tooltips
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
       return new bootstrap.Tooltip(tooltipTriggerEl);
     });
+
+    // Initialize Supply Progress Chart
+    const circulatingSupply = #{block.current_total_supply/100000000};
+    const totalSupply = 21000000;
+    BitcoinSupplyCharts.initSupplyProgressChart('supplyProgressChart', circulatingSupply, totalSupply);
+
+    // Initialize Loss Timeline Chart
+    const lossData = [
+      !{JSON.stringify(latest_losses.concat(biggest_losses).map(b => ({
+        block: b.block_number,
+        amount: (b.allowed_supply - b.new_supply) / 100000000,
+        date: b.block_timestamp
+      })))}
+    ];
+    BitcoinSupplyCharts.initLossTimelineChart('lossTimelineChart', lossData);
+
+    // Halving expansion toggle
+    function toggleHalvings() {
+      const expanded = document.getElementById('halvingExpanded');
+      const toggleText = document.getElementById('halvingToggleText');
+
+      if (expanded.classList.contains('active')) {
+        expanded.classList.remove('active');
+        expanded.style.maxHeight = '0';
+        toggleText.textContent = '▼ Show All Future Halvings';
+      } else {
+        expanded.classList.add('active');
+        expanded.style.maxHeight = expanded.scrollHeight + 'px';
+        toggleText.textContent = '▲ Hide Future Halvings';
+      }
+    }
