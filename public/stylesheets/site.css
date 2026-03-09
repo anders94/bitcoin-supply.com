@@ -117,19 +117,20 @@ main {
 }
 
 /* Losses Page - Bar Indicator */
-.loss-row {
+.loss-data-row {
   transition: all var(--transition);
 }
 
 .loss-bar-row {
   height: 4px;
-  background: transparent;
+  line-height: 4px;
 }
 
-.loss-bar-row td {
+.loss-bar-cell {
   padding: 0 !important;
-  border: none !important;
-  background: transparent;
+  border-top: none !important;
+  height: 4px;
+  overflow: visible;
 }
 
 .loss-bar {
@@ -138,10 +139,10 @@ main {
   border-radius: 0 2px 2px 0;
   box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
   transition: width 0.6s ease-out;
-  margin: 0;
+  display: block;
 }
 
-.loss-row:hover + .loss-bar-row .loss-bar {
+.loss-data-row:hover + .loss-bar-row .loss-bar {
   box-shadow: 0 0 12px rgba(239, 68, 68, 0.7);
 }
 
