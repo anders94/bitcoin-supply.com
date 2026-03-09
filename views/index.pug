@@ -258,13 +258,7 @@ block javascript
     BitcoinSupplyCharts.initSupplyProgressChart('supplyProgressChart', circulatingSupply, totalSupply);
 
     // Initialize Loss Timeline Chart
-    const lossData = [
-      !{JSON.stringify(latest_losses.concat(biggest_losses).map(b => ({
-        block: b.block_number,
-        amount: (b.allowed_supply - b.new_supply) / 100000000,
-        date: b.block_timestamp
-      })))}
-    ];
+    const lossData = !{JSON.stringify(latest_losses.concat(biggest_losses).map(b => ({ block: b.block_number, amount: (b.allowed_supply - b.new_supply) / 100000000, date: b.block_timestamp })))};
     BitcoinSupplyCharts.initLossTimelineChart('lossTimelineChart', lossData);
 
     // Halving expansion toggle
