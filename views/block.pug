@@ -83,10 +83,7 @@ block javascript
   script(src='/javascripts/charts.js')
   script.
     // Initialize block loss chart if there are transaction losses
-    const transactions = !{JSON.stringify((transactions || []).map(tx => ({
-      txid: tx.tx_hash,
-      lossAmount: tx.loss / 100000000
-    })))};
+    const transactions = !{JSON.stringify((transactions || []).map(tx => ({ txid: tx.tx_hash, lossAmount: tx.loss / 100000000 })))};
 
     if (transactions.length > 0) {
       BitcoinSupplyCharts.initBlockLossChart('blockLossChart', transactions);
