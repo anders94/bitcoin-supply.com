@@ -4,7 +4,13 @@ block content
   // Hero Section
   .hero.fade-in
     .hero-subtitle CANONICAL BITCOIN SUPPLY LEDGER
-    .hero-title.btc-amount #{helpers.format(block.current_total_supply/100000000, 8)} BTC
+    - const supplyStr = helpers.format(block.current_total_supply/100000000, 8);
+    - const [wholePart, fractionalPart] = supplyStr.split('.');
+    .hero-title.btc-amount
+      span #{wholePart}.
+      span(style='font-size: 0.5em;') #{fractionalPart}
+      |
+      | BTC
     p.text-secondary.mb-4
       | Circulating Supply • Block
       a(href='/block/'+block.block_number).text-orange.block-number= helpers.format(block.block_number)
