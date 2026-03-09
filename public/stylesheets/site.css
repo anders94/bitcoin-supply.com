@@ -120,23 +120,19 @@ main {
 .loss-row {
   position: relative;
   transition: all var(--transition);
+  border-bottom: 4px solid transparent;
+  border-image: linear-gradient(
+    to right,
+    var(--danger) 0%,
+    var(--danger) var(--loss-bar-width, 0%),
+    transparent var(--loss-bar-width, 0%),
+    transparent 100%
+  ) 1;
+  box-shadow: 0 4px 8px -4px rgba(239, 68, 68, 0.5);
 }
 
-.loss-row::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 4px;
-  width: var(--loss-bar-width, 0%);
-  background: var(--danger);
-  border-radius: 0 2px 2px 0;
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
-  transition: width 0.6s ease-out;
-}
-
-.loss-row:hover::after {
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.7);
+.loss-row:hover {
+  box-shadow: 0 4px 12px -4px rgba(239, 68, 68, 0.7);
 }
 
 /* Halving Schedule */
