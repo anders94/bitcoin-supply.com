@@ -1,0 +1,30 @@
+doctype html
+html(lang='en')
+  head
+    meta(charset='UTF-8')
+    meta(name='viewport', content='width=device-width, initial-scale=1.0')
+    title= title + ' | bitcoin supply'
+    link(rel='stylesheet', href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css')
+    link(rel='stylesheet', href='/stylesheets/design-system.css')
+    link(rel='stylesheet', href='/stylesheets/site.css')
+    link(rel='stylesheet', href='/stylesheets/nouislider.min.css')
+    link(rel='preconnect', href='https://fonts.googleapis.com')
+    link(rel='stylesheet', href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap')
+  body
+    nav.navbar.navbar-dark
+      .container-fluid
+        a.navbar-brand(href='/') ₿ bitcoin supply
+        .d-flex.align-items-center.gap-3
+          a.text-secondary.text-decoration-none(href='/losses') losses
+          a.text-secondary.text-decoration-none(href='/quantum') quantum
+          a.text-secondary.text-decoration-none(href='/proposals') proposals
+          form.d-flex.search-form(action='/search', method='POST')
+            input.form-control.me-2(type='search', name='query', placeholder='block # / txid / address', style='min-width:220px')
+            button.btn.btn-outline-warning(type='submit') search
+    main.container-fluid.py-4
+      block content
+    footer.footer.py-4.text-center
+      p.text-muted bitcoin supply explorer v2 &middot; #[a(href='/proposals') proposals] &middot; #[a(href='https://github.com') github]
+    script(src='https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js')
+    script(src='https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js')
+    block scripts

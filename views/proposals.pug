@@ -1,0 +1,28 @@
+extends layout
+
+block content
+  .container
+
+    h2.mb-2 Loss Proposals
+    p.text-secondary.mb-4
+      | Each proposal defines a category of Bitcoin outputs considered out-of-circulation.
+      | The main slider lets you include or exclude categories based on your belief.
+
+    .row
+      each p in proposals
+        .col-md-6.col-lg-4.mb-4
+          .card.h-100
+            .card-body
+              .d-flex.justify-content-between.align-items-start.mb-2
+                h5.mb-0
+                  a(href=`/proposals/${p.id}`)= p.title
+                span.badge(
+                  class=p.category === 'Provably Lost' ? 'bg-danger' : p.category.includes('Quantum') ? 'bg-info' : 'bg-warning text-dark'
+                )= p.id.split('-')[0]
+              .mb-2
+                span.badge(
+                  class=p.status === 'Final' ? 'bg-success' : 'bg-secondary'
+                )= p.status
+                span.badge.bg-secondary.ms-1= p.category
+              if p.scale && p.scale !== 'TBD'
+                .text-warning.text-mono.small= p.scale

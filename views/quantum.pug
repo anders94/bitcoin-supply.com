@@ -1,0 +1,89 @@
+extends layout
+
+block content
+  .container
+
+    h2.mb-1 ⚡ Quantum Vulnerability Explorer
+    p.text-secondary.mb-4
+      | P2PK outputs embed the public key directly in the script, exposing it to quantum attacks.
+      | P2PKH outputs are safe until the key is revealed by spending — but once spent, remaining UTXOs at that address become vulnerable.
+
+    .row.mb-4
+      .col-md-4
+        .metric-card
+          .metric-value.text-warning= formatBtc(BigInt(quantum_p2pk_sats))
+          .metric-label P2PK Exposed (BTC)
+          .metric-label.text-muted.mt-1 #{quantum_p2pk_count} UTXOs
+      .col-md-4
+        .metric-card
+          .metric-value.text-info= formatBtc(BigInt(quantum_all_sats))
+          .metric-label Total Exposed (BTC)
+          .metric-label.text-muted.mt-1 P2PK + exposed P2PKH
+      .col-md-4
+        .metric-card
+          .metric-value= topExposed.length
+          .metric-label Vulnerable Addresses (top 100)
+
+    //- Quantum Slider
+    .card.mb-4
+      .card-header ⚡ Quantum Attack Threshold
+      .card-body
+        p.text-muted
+          | Drag to set how much BTC a quantum attacker captures (targeting largest outputs first).
+        .mb-4
+          .d-flex.justify-content-between.mb-2
+            small.text-muted 0 BTC
+            small.text-secondary#q-label-center
+            small.text-muted#q-label-max= formatBtc(BigInt(quantum_all_sats)) + ' BTC total'
+          #quantum-page-slider
+
+        .row.mt-4
+          .col-md-4
+            .metric-card
+              .metric-value.text-warning#qp-stolen 0.00
+              .metric-label BTC stolen
+          .col-md-4
+            .metric-card
+              .metric-value#qp-keys —
+              .metric-label Keys to break
+          .col-md-4
+            .metric-card
+              .metric-value.text-success#qp-effective —
+              .metric-label Effective supply after attack
+
+    //- Top Exposed Addresses Table
+    .card.mb-4
+      .card-header Top Exposed Addresses (by balance)
+      .card-body.p-0
+        .table-responsive
+          table.table.tx-table.table-sticky-header.mb-0
+            thead
+              tr
+                th Address
+                th Balance (BTC)
+                th UTXOs
+                th Type
+                th Pubkey
+            tbody
+              each a in topExposed
+                tr
+                  td
+                    a.hash-short(href=`/address/${a.address}`)= a.address ? a.address.slice(0, 24) + '...' : '—'
+                  td.btc-amount.text-warning= formatBtc(BigInt(a.balance))
+                  td= a.utxo_count
+                  td
+                    span.badge(class=a.is_p2pk ? 'bg-danger' : 'bg-warning text-dark')
+                      = a.is_p2pk ? 'P2PK' : 'Exposed P2PKH'
+                  td
+                    if a.pubkey_hex
+                      span.hash-short.text-mono= a.pubkey_hex.slice(0, 16) + '...'
+                    else
+                      span.text-muted —
+
+block scripts
+  script(src='/javascripts/dist/quantum.js')
+  script.
+    window.QUANTUM_DATA = {
+      quantum_all_sats: '!{quantum_all_sats}',
+      quantum_p2pk_sats: '!{quantum_p2pk_sats}',
+    };

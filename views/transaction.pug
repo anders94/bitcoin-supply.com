@@ -1,0 +1,79 @@
+extends layout
+
+block content
+  .container
+
+    h2.mb-1 Transaction
+    .hash-display.mb-4= tx.txid
+
+    .row.mb-4
+      .col-md-3
+        .metric-card
+          .metric-value= tx.confirmations || '—'
+          .metric-label Confirmations
+      .col-md-3
+        .metric-card
+          .metric-value= tx.vin ? tx.vin.length : 0
+          .metric-label Inputs
+      .col-md-3
+        .metric-card
+          .metric-value= tx.vout ? tx.vout.length : 0
+          .metric-label Outputs
+      .col-md-3
+        .metric-card
+          .metric-value= tx.size ? tx.size : '—'
+          .metric-label Size (bytes)
+
+    .row
+      .col-md-6
+        h4.mb-3 Inputs
+        if tx.vin && tx.vin[0] && tx.vin[0].coinbase
+          .io-card
+            .io-card-header COINBASE
+            .io-item
+              span.text-muted Coinbase data
+              span.io-value new coins
+        else
+          each vin in (tx.vin || [])
+            .io-card
+              if vin.txid
+                .io-card-header
+                  a(href=`/transaction/${vin.txid}`)= vin.txid.slice(0, 20) + '...'
+                  span.text-muted  :#{vin.vout}
+                if vin.prevout
+                  .io-item
+                    span
+                      if vin.prevout.scriptPubKey && vin.prevout.scriptPubKey.address
+                        a(href=`/address/${vin.prevout.scriptPubKey.address}`)= vin.prevout.scriptPubKey.address
+                      else
+                        span.text-muted (no address)
+                    span.io-value= formatBtc(BigInt(Math.round(vin.prevout.value * 1e8)))
+              else
+                .text-muted coinbase
+
+      .col-md-6
+        h4.mb-3 Outputs
+        each vout in (tx.vout || [])
+          - const classified = utxoMap[vout.n]
+          .io-card(class=classified && classified.loss_bucket === 1 ? 'border-danger' : '')
+            .io-card-header
+              span Output ##{vout.n}
+              if classified
+                each rule in classified.loss_rules
+                  a.badge.bg-danger.ms-1.text-decoration-none(href=`/proposals/${rule}`)= rule
+                if classified.loss_bucket === 1
+                  span.badge.bg-danger.ms-1 Provably Lost
+                else if classified.loss_bucket === 2
+                  span.badge.bg-warning.text-dark.ms-1 Probably Lost
+                else if classified.loss_bucket === 4
+                  span.badge.bg-info.ms-1 Quantum
+            .io-item
+              span
+                if vout.scriptPubKey && vout.scriptPubKey.address
+                  a(href=`/address/${vout.scriptPubKey.address}`)= vout.scriptPubKey.address
+                else
+                  span.text-muted= vout.scriptPubKey ? vout.scriptPubKey.type : 'unknown'
+              span.io-value= formatBtc(BigInt(Math.round(vout.value * 1e8)))
+            if vout.scriptPubKey && vout.scriptPubKey.hex
+              .mt-2
+                small.text-muted.text-mono= vout.scriptPubKey.hex

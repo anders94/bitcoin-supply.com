@@ -1,0 +1,24 @@
+extends layout
+
+block content
+  .container
+
+    a.btn.btn-outline-secondary.mb-4(href='/proposals') &larr; All Proposals
+
+    .card
+      .card-body.proposal-content
+        != content
+
+block scripts
+  style.
+    .proposal-content h1 { font-size: 1.75rem; color: var(--btc-orange); margin-bottom: 1rem; }
+    .proposal-content h2 { font-size: 1.25rem; color: var(--text-primary); margin-top: 1.5rem; }
+    .proposal-content table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+    .proposal-content table th, .proposal-content table td {
+      border: 1px solid var(--border); padding: 0.5rem 1rem;
+    }
+    .proposal-content table th { background: var(--bg-tertiary); }
+    .proposal-content code { background: var(--bg-tertiary); padding: 0.1rem 0.3rem; border-radius: 4px; color: var(--btc-orange); font-family: var(--font-mono); }
+    .proposal-content pre { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; overflow-x: auto; }
+    .proposal-content pre code { background: none; padding: 0; }
+    .proposal-content p { color: var(--text-secondary); }

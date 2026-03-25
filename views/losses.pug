@@ -1,0 +1,58 @@
+extends layout
+
+block content
+  .container
+
+    .d-flex.justify-content-between.align-items-center.mb-4
+      h2 Loss History
+      div
+        a.btn.btn-outline-secondary.me-2(href='/losses') All
+        each rule in ['000','001','003','004','005','006','007','008','009','010','011','012','013']
+          a.btn.btn-sm.me-1(
+            class=filterRule === rule ? 'btn-danger' : 'btn-outline-danger'
+            href=`/losses?rule=${rule}`
+          )= rule
+
+    .card
+      .card-body.p-0
+        .table-responsive
+          table.table.tx-table.table-sticky-header.mb-0
+            thead
+              tr
+                th Block
+                th Date
+                th Txid
+                th Output
+                th Value (BTC)
+                th Rules
+                th Address
+            tbody
+              each u in losses
+                tr(class=u.loss_bucket === 1 ? 'loss-data-row' : '')
+                  td
+                    a(href=`/block/${u.block_number}`)= u.block_number
+                  td.timestamp= new Date(u.block_timestamp).toLocaleDateString('en-US')
+                  td
+                    a.hash-short(href=`/transaction/${u.tx_hash}`)= u.tx_hash.slice(0, 16) + '...'
+                  td= u.output_index
+                  td.btc-amount.text-warning= formatBtc(BigInt(u.value_sats))
+                  td
+                    each rule in u.loss_rules
+                      a.badge.bg-danger.me-1.text-decoration-none(href=`/proposals/${rule}`)= rule
+                  td
+                    if u.address
+                      a.hash-short(href=`/address/${u.address}`)= u.address.slice(0, 20) + '...'
+                    else
+                      span.text-muted —
+
+    //- Pagination
+    if totalPages > 1
+      nav.mt-4
+        ul.pagination.justify-content-center
+          li.page-item(class=page <= 1 ? 'disabled' : '')
+            a.page-link(href=`/losses?page=${page - 1}${filterRule ? '&rule=' + filterRule : ''}`) &laquo; Prev
+          each p in Array.from({length: Math.min(totalPages, 10)}, (_, i) => i + Math.max(1, page - 5))
+            li.page-item(class=p === page ? 'active' : '')
+              a.page-link(href=`/losses?page=${p}${filterRule ? '&rule=' + filterRule : ''}`)= p
+          li.page-item(class=page >= totalPages ? 'disabled' : '')
+            a.page-link(href=`/losses?page=${page + 1}${filterRule ? '&rule=' + filterRule : ''}`) Next &raquo;

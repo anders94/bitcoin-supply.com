@@ -1,0 +1,146 @@
+extends layout
+
+block content
+  .container
+
+    //- Hero Section
+    .hero.mb-4
+      .hero-subtitle OUT OF CIRCULATION ESTIMATE
+      .hero-title#hero-btc-display
+        | — BTC
+      .hero-subtitle#hero-label out of circulation (loading...)
+      .mt-3.text-muted
+        small block&nbsp;
+          span#hero-block= latestBlock ? latestBlock.block_number : '—'
+          |  &middot;&nbsp;
+          span#hero-time loading...
+          |  &nbsp;
+          span.text-success#sse-dot ●
+
+    //- Main Spectrum Slider
+    .card.mb-4
+      .card-header
+        span OUT OF CIRCULATION SPECTRUM
+      .card-body
+        //- 5-stop labels
+        .d-flex.justify-content-between.mb-2.spectrum-labels
+          span.text-muted(title='All UTXOs counted as out-of-circulation') Everything
+          span.text-secondary Dormant
+          span.text-secondary Probably Lost
+          span.text-warning Provably Lost
+          span.text-muted Nothing
+
+        //- noUiSlider target
+        #spectrum-slider.mb-4
+
+        //- Dormancy sub-slider (hidden unless "Dormant" selected)
+        #dormancy-section.mb-4(style='display:none')
+          .d-flex.justify-content-between.mb-2
+            small.text-muted 1 year dormant
+            small.text-secondary#dormancy-label 5 years
+            small.text-muted 20 years dormant
+          #dormancy-slider
+
+        //- Display area
+        .row.mt-4
+          .col-md-6
+            .metric-card
+              .metric-value#spectrum-sats —
+              .metric-label#spectrum-desc loading...
+          .col-md-3
+            .metric-card
+              .metric-value#spectrum-utxos —
+              .metric-label UTXOs
+          .col-md-3
+            .metric-card
+              .metric-value#spectrum-effective —
+              .metric-label Effective Supply
+
+        //- Loss breakdown bar
+        .mt-4#loss-breakdown-bar
+          .d-flex.justify-content-between.mb-1
+            small.text-muted Loss breakdown by proposal
+            small.text-muted#breakdown-total
+          .progress(style='height:8px')
+            #breakdown-fill.progress-bar(style='width:0%')
+
+    //- Quantum Section
+    .card.mb-4
+      .card-header
+        button.btn.btn-link.text-warning.text-decoration-none.p-0(
+          data-bs-toggle='collapse', data-bs-target='#quantum-section'
+          aria-expanded='false'
+        )
+          | ⚡ QUANTUM SCENARIO (click to expand)
+      #quantum-section.collapse
+        .card-body
+          p.text-secondary
+            | If a quantum computer could derive private keys from public keys, how much BTC would be at risk?
+            | The slider shows cumulative exposure, targeting the largest outputs first (attacker's optimal strategy).
+
+          .mb-4
+            .d-flex.justify-content-between.mb-2
+              small.text-muted 0 BTC stolen
+              small.text-secondary#quantum-label
+              small.text-muted#quantum-max-label all exposed BTC
+            #quantum-slider
+
+          .row.mt-4
+            .col-md-4
+              .metric-card
+                .metric-value#quantum-sats 0
+                .metric-label BTC at risk
+            .col-md-4
+              .metric-card
+                .metric-value#quantum-keys —
+                .metric-label keys to break
+            .col-md-4
+              .metric-card
+                .metric-value#quantum-effective —
+                .metric-label effective supply after attack
+
+    //- Supply Chart
+    .row.mb-4.d-none.d-md-flex
+      .col-md-5
+        .chart-container
+          canvas#supply-chart
+      .col-md-7
+        .card.h-100
+          .card-header Recent Provably Lost UTXOs
+          .card-body.p-0
+            .table-responsive
+              table.table.table-sm.tx-table.mb-0
+                thead
+                  tr
+                    th Block
+                    th Value
+                    th Rules
+                    th Address
+                tbody
+                  each u in recent_losses
+                    tr
+                      td
+                        a(href=`/block/${u.block_number}`)= u.block_number
+                      td.btc-amount.text-warning= formatBtc(BigInt(u.value_sats))
+                      td
+                        each rule in u.loss_rules
+                          span.badge.bg-danger.me-1= rule
+                      td
+                        if u.address
+                          a.text-truncate.d-inline-block(href=`/address/${u.address}`, style='max-width:120px')= u.address
+                        else
+                          span.text-muted —
+
+block scripts
+  script(src='/javascripts/dist/slider.js')
+  script(src='/javascripts/dist/charts.js')
+  script.
+    // Pass server-side data to frontend
+    window.SUPPLY_DATA = {
+      provably_lost_sats: '!{provably_lost_sats}',
+      probably_lost_sats: '!{probably_lost_sats}',
+      all_utxos_sats: '!{all_utxos_sats}',
+      quantum_total_sats: '!{quantum_total_sats}',
+      dormancy_curve: !{dormancy_curve},
+      current_block: #{latestBlock ? latestBlock.block_number : 0},
+    };

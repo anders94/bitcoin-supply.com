@@ -1,0 +1,9 @@
+extends layout
+
+block content
+  .container
+    .error-container
+      .error-code= code || 500
+      .error-message= message || 'An error occurred'
+      .mt-4
+        a.btn.btn-outline-warning(href='/') &larr; Back to Home

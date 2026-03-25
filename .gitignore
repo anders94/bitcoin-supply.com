@@ -1,0 +1,19 @@
+# Environment
+.env
+
+# Build output
+dist/
+public/javascripts/dist/
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+nohup.out
+
+# Claude Code session state (may contain approved commands with local credentials)
+.claude/
+
+# OS
+.DS_Store

@@ -1,0 +1,66 @@
+extends layout
+
+block content
+  .container
+
+    h2.mb-1 Address
+    .hash-display.mb-4= addr
+
+    if isQuantumVulnerable
+      .alert.alert-danger.mb-4
+        strong ⚡ Quantum Vulnerable:&nbsp;
+        | This address has had its public key revealed in a prior transaction spend.
+        | A sufficiently powerful quantum computer could derive the private key.
+        if addrInfo && addrInfo.pubkey_hex
+          br
+          small.text-mono Public key: #{addrInfo.pubkey_hex}
+
+    .row.mb-4
+      .col-md-3
+        .metric-card
+          .metric-value.text-warning= formatBtc(BigInt(totalBalance))
+          .metric-label Balance (BTC)
+      .col-md-3
+        .metric-card
+          .metric-value= utxos.length
+          .metric-label UTXOs (showing)
+      .col-md-3
+        .metric-card
+          .metric-value= addrInfo ? addrInfo.first_seen_block : '—'
+          .metric-label First Seen Block
+      .col-md-3
+        .metric-card
+          .metric-value= addrInfo ? addrInfo.last_active_block : '—'
+          .metric-label Last Active Block
+
+    if utxos.length > 0
+      .card
+        .card-header UTXOs
+        .card-body.p-0
+          .table-responsive
+            table.table.tx-table.mb-0
+              thead
+                tr
+                  th Txid
+                  th Output
+                  th Value (BTC)
+                  th Block
+                  th Date
+                  th Classification
+              tbody
+                each u in utxos
+                  tr(class=u.loss_bucket === 1 ? 'table-danger' : u.loss_bucket === 4 ? 'table-warning' : '')
+                    td
+                      a.hash-short(href=`/transaction/${u.tx_hash}`)= u.tx_hash.slice(0, 16) + '...'
+                    td= u.output_index
+                    td.btc-amount.text-warning= formatBtc(BigInt(u.value_sats))
+                    td
+                      a(href=`/block/${u.block_number}`)= u.block_number
+                    td.timestamp= new Date(u.block_timestamp).toLocaleDateString('en-US')
+                    td
+                      each rule in u.loss_rules
+                        a.badge.bg-danger.me-1.text-decoration-none(href=`/proposals/${rule}`)= rule
+                      if u.pubkey_exposed && u.loss_rules.length === 0
+                        span.badge.bg-info Quantum
+    else
+      .alert.alert-success No UTXOs found for this address.

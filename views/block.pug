@@ -1,0 +1,79 @@
+extends layout
+
+block content
+  .container
+
+    .block-nav
+      if prevBlock !== null
+        a.btn.btn-outline-secondary(href=`/block/${prevBlock}`) &larr; Block #{prevBlock}
+      a.btn.btn-outline-secondary(href='/') Home
+      if nextBlock !== null
+        a.btn.btn-outline-secondary(href=`/block/${nextBlock}`) Block #{nextBlock} &rarr;
+
+    .block-header(class=hasMinerLoss ? 'has-loss' : 'no-loss')
+      .block-header-title Block ##{block.block_number}
+      .hash-display.mb-3= block.block_hash
+      .row
+        .col-md-3
+          .metric-card
+            .metric-value= new Date(block.block_timestamp).toLocaleDateString('en-US')
+            .metric-label Timestamp
+        .col-md-3
+          .metric-card
+            .metric-value= block.tx_count
+            .metric-label Transactions
+        .col-md-3
+          .metric-card
+            .metric-value.text-warning= formatBtc(BigInt(block.coinbase_value_sats))
+            .metric-label Coinbase Value (BTC)
+        .col-md-3
+          .metric-card
+            .metric-value(class=hasMinerLoss ? 'text-danger' : 'text-success')
+              = hasMinerLoss ? '-' + formatBtc(BigInt(minerLoss)) : '0.00'
+            .metric-label Miner Loss (BTC)
+
+    //- Miner loss alert
+    if hasMinerLoss
+      .alert.alert-danger.mb-4
+        strong Miner Loss (Proposal 002):&nbsp;
+        | This miner left #{formatBtc(BigInt(minerLoss))} BTC unclaimed.
+        | Allowed supply was #{formatBtc(BigInt(block.allowed_supply_sats))} BTC but only #{formatBtc(BigInt(block.coinbase_value_sats))} BTC was taken.
+
+    //- Loss UTXOs in this block
+    if lossUtxos.length > 0
+      .card
+        .card-header
+          | Loss UTXOs in Block #{block.block_number}
+          span.badge.bg-danger.ms-2= lossUtxos.length
+        .card-body.p-0
+          .table-responsive
+            table.table.tx-table.mb-0
+              thead
+                tr
+                  th Txid
+                  th Output
+                  th Value (BTC)
+                  th Rules
+                  th Bucket
+                  th Address
+              tbody
+                each u in lossUtxos
+                  tr(class=u.loss_bucket === 1 ? 'table-danger' : '')
+                    td
+                      a.hash-short(href=`/transaction/${u.tx_hash}`)= u.tx_hash.slice(0, 16) + '...'
+                    td= u.output_index
+                    td.btc-amount.text-warning= formatBtc(BigInt(u.value_sats))
+                    td
+                      each rule in u.loss_rules
+                        a.badge.bg-danger.me-1.text-decoration-none(href=`/proposals/${rule}`)= rule
+                    td
+                      span.badge(class=u.loss_bucket === 1 ? 'bg-danger' : 'bg-warning text-dark')
+                        = u.loss_bucket === 1 ? 'Provably Lost' : 'Probably Lost'
+                    td
+                      if u.address
+                        a(href=`/address/${u.address}`)
+                          span.hash-short= u.address
+                      else
+                        span.text-muted —
+    else
+      .alert.alert-success No loss UTXOs in this block.
