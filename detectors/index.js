@@ -11,6 +11,37 @@ function modpow(base, exp, mod) {
     return result;
 }
 
+// Parses a bare M-of-N multisig scriptPubKey hex.
+// Format: OP_M [push+key]×N OP_N OP_CHECKMULTISIG
+// Returns { m, n, pubkeys } or null if not a standard multisig script.
+function parseMultisigScript(hex) {
+    if (!hex.endsWith('ae')) return null;
+    const mOpcode = parseInt(hex.slice(0, 2), 16);
+    if (mOpcode < 0x51 || mOpcode > 0x60) return null;
+    const m = mOpcode - 0x50;
+    const pubkeys = [];
+    let pos = 2;
+    const end = hex.length - 4; // OP_N (2) + 'ae' (2)
+    while (pos < end) {
+        const lenByte = hex.slice(pos, pos + 2);
+        if (lenByte === '41') {          // uncompressed: push 65 bytes
+            pubkeys.push(hex.slice(pos + 2, pos + 132));
+            pos += 132;
+        } else if (lenByte === '21') {   // compressed: push 33 bytes
+            pubkeys.push(hex.slice(pos + 2, pos + 68));
+            pos += 68;
+        } else {
+            return null;
+        }
+    }
+    if (pos !== end) return null;
+    const nOpcode = parseInt(hex.slice(end, end + 2), 16);
+    if (nOpcode < 0x51 || nOpcode > 0x60) return null;
+    const n = nOpcode - 0x50;
+    if (pubkeys.length !== n || m > n) return null;
+    return { m, n, pubkeys };
+}
+
 function isOnSecp256k1Curve(pubkeyHex) {
     const p = SECP256K1_P;
     const prefix = pubkeyHex.slice(0, 2);
@@ -73,6 +104,14 @@ module.exports = {
 	    }
 	    if (pubkeyHex !== null && !isOnSecp256k1Curve(pubkeyHex)) {
 		return true;
+	    }
+	    // Proposal 006 - Multisig with Off-Curve Public Keys
+	    const parsed = parseMultisigScript(hex);
+	    if (parsed !== null) {
+		const validCount = parsed.pubkeys.filter(isOnSecp256k1Curve).length;
+		if (validCount < parsed.m) {
+		    return true;
+		}
 	    }
 	}
 	return false;
