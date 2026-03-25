@@ -86,7 +86,7 @@ module.exports = {
 	    return true;
 	}
 	// Proposal 004 - OP_RETURN
-	else if (output.script_asm.startsWith('OP_RETURN ')) { // OP_RETURN losses
+	else if (output.script_hex.startsWith('6a')) { // OP_RETURN losses (includes bare 6a)
 	    return true;
 	}
 	// Proposal 005 - Off-Curve Public Key
@@ -111,6 +111,48 @@ module.exports = {
 		const validCount = parsed.pubkeys.filter(isOnSecp256k1Curve).length;
 		if (validCount < parsed.m) {
 		    return true;
+		}
+	    }
+	    // Proposal 007 - Taproot off-curve x-only key
+	    if (hex.length === 68 && hex.startsWith('5120')) {
+		const x = BigInt('0x' + hex.slice(4, 68));
+		if (x === 0n || x >= SECP256K1_P) {
+		    return true;
+		}
+		const x3 = (x * x % SECP256K1_P * x) % SECP256K1_P;
+		const rhs = (x3 + 7n) % SECP256K1_P;
+		if (modpow(rhs, (SECP256K1_P - 1n) / 2n, SECP256K1_P) !== 1n) {
+		    return true;
+		}
+	    }
+	    // Proposal 008 - SegWit v0 wrong program length
+	    else if (hex.startsWith('00') && hex.length >= 8) {
+		const pushByte = parseInt(hex.slice(2, 4), 16);
+		if (pushByte >= 2 && pushByte <= 40 &&         // BIP141 valid range
+		    pushByte !== 20 && pushByte !== 32 &&       // not P2WPKH or P2WSH
+		    hex.length === 4 + pushByte * 2) {          // total length consistent
+		    return true;
+		}
+	    }
+	    // Proposal 009 - Wrong-length hash push in P2PKH/P2SH
+	    else {
+		// P2PKH: 76 a9 [push] [data] 88 ac
+		if (hex.startsWith('76a9') && hex.endsWith('88ac') && hex.length >= 10) {
+		    const pushByte = parseInt(hex.slice(4, 6), 16);
+		    if (pushByte <= 0x4b &&                          // direct push only
+			hex.length === 6 + pushByte * 2 + 4 &&      // consistent total length
+			pushByte !== 20) {                           // not standard 20-byte hash
+			return true;
+		    }
+		}
+		// P2SH: a9 [push] [data] 87
+		else if (hex.startsWith('a9') && hex.endsWith('87') && hex.length >= 8) {
+		    const pushByte = parseInt(hex.slice(2, 4), 16);
+		    if (pushByte <= 0x4b &&
+			hex.length === 4 + pushByte * 2 + 2 &&
+			pushByte !== 20) {
+			return true;
+		    }
 		}
 	    }
 	}
