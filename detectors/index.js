@@ -1,3 +1,35 @@
+const SECP256K1_P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn;
+
+function modpow(base, exp, mod) {
+    let result = 1n;
+    base = base % mod;
+    while (exp > 0n) {
+        if (exp % 2n === 1n) result = (result * base) % mod;
+        exp = exp / 2n;
+        base = (base * base) % mod;
+    }
+    return result;
+}
+
+function isOnSecp256k1Curve(pubkeyHex) {
+    const p = SECP256K1_P;
+    const prefix = pubkeyHex.slice(0, 2);
+    if (prefix === '04' && pubkeyHex.length === 130) {
+        const x = BigInt('0x' + pubkeyHex.slice(2, 66));
+        const y = BigInt('0x' + pubkeyHex.slice(66, 130));
+        if (x === 0n || x >= p || y === 0n || y >= p) return false;
+        const x3 = (x * x % p * x) % p;
+        return (y * y) % p === (x3 + 7n) % p;
+    } else if ((prefix === '02' || prefix === '03') && pubkeyHex.length === 66) {
+        const x = BigInt('0x' + pubkeyHex.slice(2, 66));
+        if (x === 0n || x >= p) return false;
+        const x3 = (x * x % p * x) % p;
+        const rhs = (x3 + 7n) % p;
+        return modpow(rhs, (p - 1n) / 2n, p) === 1n;
+    }
+    return false;
+}
+
 module.exports = {
     blockLoss: (block) => {
 	// Proposal 002 - Miner Loss
@@ -25,6 +57,23 @@ module.exports = {
 	// Proposal 004 - OP_RETURN
 	else if (output.script_asm.startsWith('OP_RETURN ')) { // OP_RETURN losses
 	    return true;
+	}
+	// Proposal 005 - Off-Curve Public Key
+	else {
+	    const hex = output.script_hex;
+	    let pubkeyHex = null;
+	    // Uncompressed P2PK: push(65) + 04 + x(32) + y(32) + OP_CHECKSIG
+	    if (hex.length === 134 && hex.startsWith('41') && hex.endsWith('ac')) {
+		pubkeyHex = hex.slice(2, 132);
+	    }
+	    // Compressed P2PK: push(33) + 02/03 + x(32) + OP_CHECKSIG
+	    else if (hex.length === 70 && hex.startsWith('21') &&
+		     (hex.slice(2, 4) === '02' || hex.slice(2, 4) === '03') && hex.endsWith('ac')) {
+		pubkeyHex = hex.slice(2, 68);
+	    }
+	    if (pubkeyHex !== null && !isOnSecp256k1Curve(pubkeyHex)) {
+		return true;
+	    }
 	}
 	return false;
     }
