@@ -61,6 +61,30 @@ function isOnSecp256k1Curve(pubkeyHex) {
     return false;
 }
 
+function containsAbortOpcode(hex) {
+    let pos = 0;
+    while (pos + 1 < hex.length) {
+        const opcode = parseInt(hex.slice(pos, pos + 2), 16);
+        pos += 2;
+        if (opcode === 0x65 || opcode === 0x66) return true;
+        if (opcode >= 0x01 && opcode <= 0x4b) {
+            pos += opcode * 2;         // skip N data bytes
+        } else if (opcode === 0x4c) {  // OP_PUSHDATA1
+            if (pos + 2 > hex.length) break;
+            const len = parseInt(hex.slice(pos, pos + 2), 16);
+            pos += 2 + len * 2;
+        } else if (opcode === 0x4d) {  // OP_PUSHDATA2 (little-endian)
+            if (pos + 4 > hex.length) break;
+            const len = parseInt(hex.slice(pos, pos + 2), 16) +
+                        parseInt(hex.slice(pos + 2, pos + 4), 16) * 256;
+            pos += 4 + len * 2;
+        } else if (opcode === 0x4e) {  // OP_PUSHDATA4: break for safety
+            break;
+        }
+    }
+    return false;
+}
+
 module.exports = {
     blockLoss: (block) => {
 	// Proposal 002 - Miner Loss
@@ -87,6 +111,10 @@ module.exports = {
 	}
 	// Proposal 004 - OP_RETURN
 	else if (output.script_hex.startsWith('6a')) { // OP_RETURN losses (includes bare 6a)
+	    return true;
+	}
+	// Proposal 011 - OP_VERIF / OP_VERNOTIF abort opcodes
+	else if (containsAbortOpcode(output.script_hex)) {
 	    return true;
 	}
 	// Proposal 005 - Off-Curve Public Key
@@ -153,6 +181,19 @@ module.exports = {
 			pushByte !== 20) {
 			return true;
 		    }
+		}
+	    }
+	    // Proposal 010 - P2PK with invalid key encoding
+	    if (hex.endsWith('ac')) {
+		const pb = parseInt(hex.slice(0, 2), 16);
+		if (pb >= 1 && pb <= 0x4b && hex.length === (pb + 2) * 2) {
+		    if (pb !== 33 && pb !== 65) {
+			return true; // wrong-length key — can never be valid
+		    } else if (pb === 33 &&
+			       hex.slice(2, 4) !== '02' && hex.slice(2, 4) !== '03') {
+			return true; // 33-byte with invalid prefix
+		    }
+		    // pb === 65 with invalid prefix: already caught by Proposal 005
 		}
 	    }
 	}
