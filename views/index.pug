@@ -5,17 +5,23 @@ block content
 
     //- Hero Section
     .hero.mb-4
-      .hero-subtitle OUT OF CIRCULATION ESTIMATE
-      .hero-title#hero-btc-display
-        | — BTC
-      .hero-subtitle#hero-label out of circulation (loading...)
-      .mt-3.text-muted
-        small block&nbsp;
-          span#hero-block= latestBlock ? latestBlock.block_number : '—'
-          |  &middot;&nbsp;
-          span#hero-time loading...
-          |  &nbsp;
-          span.text-success#sse-dot ●
+      .row.align-items-center
+        .col-md-7
+          .hero-subtitle OUT OF CIRCULATION ESTIMATE
+          .hero-title#hero-btc-display
+            | — BTC
+          .hero-subtitle#hero-label out of circulation (loading...)
+          .hero-subtitle.text-muted#hero-context
+          .mt-3.text-muted
+            small block&nbsp;
+              span#hero-block= latestBlock ? latestBlock.block_number : '—'
+              |  &middot;&nbsp;
+              span#hero-time loading...
+              |  &nbsp;
+              span.text-success#sse-dot ●
+        .col-md-5.d-none.d-md-block
+          .chart-container
+            canvas#supply-chart
 
     //- Main Spectrum Slider
     .card.mb-4
@@ -50,7 +56,7 @@ block content
           .col-md-3
             .metric-card
               .metric-value#spectrum-utxos —
-              .metric-label UTXOs
+              .metric-label unspent outputs
           .col-md-3
             .metric-card
               .metric-value#spectrum-effective —
@@ -67,16 +73,13 @@ block content
     //- Quantum Section
     .card.mb-4
       .card-header
-        button.btn.btn-link.text-warning.text-decoration-none.p-0(
-          data-bs-toggle='collapse', data-bs-target='#quantum-section'
-          aria-expanded='false'
-        )
-          | ⚡ QUANTUM SCENARIO (click to expand)
-      #quantum-section.collapse
+        span.text-warning ⚡ QUANTUM SCENARIO
+      #quantum-section
         .card-body
           p.text-secondary
-            | If a quantum computer could derive private keys from public keys, how much BTC would be at risk?
-            | The slider shows cumulative exposure, targeting the largest outputs first (attacker's optimal strategy).
+            | A sufficiently powerful quantum computer could derive a private key from an exposed public key.
+            | Not all Bitcoin is at risk — only outputs whose public key is already visible on-chain (P2PK outputs and addresses that have spent at least once).
+            | The slider shows cumulative exposure, targeting the largest vulnerable outputs first (an attacker's optimal strategy).
 
           .mb-4
             .d-flex.justify-content-between.mb-2
@@ -99,37 +102,32 @@ block content
                 .metric-value#quantum-effective —
                 .metric-label effective supply after attack
 
-    //- Supply Chart
-    .row.mb-4.d-none.d-md-flex
-      .col-md-5
-        .chart-container
-          canvas#supply-chart
-      .col-md-7
-        .card.h-100
-          .card-header Recent Provably Lost UTXOs
-          .card-body.p-0
-            .table-responsive
-              table.table.table-sm.tx-table.mb-0
-                thead
-                  tr
-                    th Block
-                    th Value
-                    th Rules
-                    th Address
-                tbody
-                  each u in recent_losses
-                    tr
-                      td
-                        a(href=`/block/${u.block_number}`)= u.block_number
-                      td.btc-amount.text-warning= formatBtc(BigInt(u.value_sats))
-                      td
-                        each rule in u.loss_rules
-                          span.badge.bg-danger.me-1= rule
-                      td
-                        if u.address
-                          a.text-truncate.d-inline-block(href=`/address/${u.address}`, style='max-width:120px')= u.address
-                        else
-                          span.text-muted —
+    //- Recent Provably Lost UTXOs
+    .card.mb-4
+      .card-header Recent Provably Lost UTXOs
+      .card-body.p-0
+        .table-responsive
+          table.table.table-sm.tx-table.mb-0
+            thead
+              tr
+                th Block
+                th Value
+                th Rules
+                th Address
+            tbody
+              each u in recent_losses
+                tr
+                  td
+                    a(href=`/block/${u.block_number}`)= u.block_number
+                  td.btc-amount.text-warning= formatBtc(BigInt(u.value_sats))
+                  td
+                    each rule in u.loss_rules
+                      span.badge.bg-danger.me-1= rule
+                  td
+                    if u.address
+                      a.text-truncate.d-inline-block(href=`/address/${u.address}`, style='max-width:120px')= u.address
+                    else
+                      span.text-muted —
 
 block scripts
   script(src='/javascripts/dist/slider.js')
@@ -138,8 +136,11 @@ block scripts
     // Pass server-side data to frontend
     window.SUPPLY_DATA = {
       provably_lost_sats: '!{provably_lost_sats}',
+      provably_lost_count: '!{provably_lost_count}',
       probably_lost_sats: '!{probably_lost_sats}',
+      probably_lost_count: '!{probably_lost_count}',
       all_utxos_sats: '!{all_utxos_sats}',
+      all_utxos_count: '!{all_utxos_count}',
       quantum_total_sats: '!{quantum_total_sats}',
       dormancy_curve: !{dormancy_curve},
       current_block: #{latestBlock ? latestBlock.block_number : 0},

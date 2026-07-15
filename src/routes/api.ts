@@ -183,27 +183,26 @@ router.get('/quantum', async (req: Request, res: Response) => {
         FROM utxos WHERE loss_rules @> '{015}'
       `);
 
-      // Top P2PK addresses
+      // Top P2PK addresses — use pre-aggregated address_info with is_p2pk flag
       const { rows: topP2pk } = await pool.query(`
-        SELECT address, SUM(value_sats) balance, COUNT(*) utxo_count
-        FROM utxos WHERE loss_rules @> '{015}' AND address IS NOT NULL
-        GROUP BY address ORDER BY balance DESC LIMIT 20
+        SELECT address, utxo_value_sats AS balance, utxo_count
+        FROM address_info WHERE is_p2pk = TRUE AND utxo_count > 0
+        ORDER BY utxo_value_sats DESC LIMIT 20
       `);
 
       // Exposed PKH stats (pubkey revealed via prior spend, not P2PK)
       const { rows: exposedRows } = await pool.query(`
-        SELECT COALESCE(SUM(value_sats), 0) total_sats, COUNT(*) utxo_count
-        FROM utxos WHERE pubkey_exposed = TRUE AND NOT (loss_rules @> '{015}')
+        SELECT COALESCE(SUM(utxo_value_sats), 0) total_sats, SUM(utxo_count) utxo_count
+        FROM address_info WHERE pubkey_exposed = TRUE AND is_p2pk = FALSE AND utxo_count > 0
       `);
 
-      // By exposure year
+      // By exposure year — address_info has pubkey_exposed_at_block and pre-aggregated balance
       const { rows: byYear } = await pool.query(`
-        SELECT EXTRACT(YEAR FROM ai.pubkey_exposed_at_block::text::bigint::float8 / 100000 * interval '1 year' + timestamp '2009-01-03') yr,
-               COUNT(DISTINCT u.address) addr_count,
-               SUM(u.value_sats) total_sats
-        FROM utxos u
-        JOIN address_info ai ON ai.address = u.address
-        WHERE u.pubkey_exposed = TRUE AND ai.pubkey_exposed_at_block IS NOT NULL
+        SELECT EXTRACT(YEAR FROM pubkey_exposed_at_block::float8 / 100000 * interval '1 year' + timestamp '2009-01-03') yr,
+               COUNT(*) addr_count,
+               SUM(utxo_value_sats) total_sats
+        FROM address_info
+        WHERE pubkey_exposed_at_block IS NOT NULL AND utxo_count > 0
         GROUP BY 1 ORDER BY 1
       `);
 
@@ -239,53 +238,72 @@ router.get('/quantum', async (req: Request, res: Response) => {
 router.get('/quantum-curve', async (req: Request, res: Response) => {
   try {
     const data = await withCache('api:quantum-curve', 600, async () => {
-      // Cumulative curve sorted by value descending
-      // Breakpoints at cumulative thresholds
-      const thresholds = [
-        1_000_000_000n,       // 10 BTC
-        10_000_000_000n,      // 100 BTC
-        100_000_000_000n,     // 1,000 BTC
-        1_000_000_000_000n,   // 10,000 BTC
-        10_000_000_000_000n,  // 100,000 BTC
-        100_000_000_000_000n, // 1,000,000 BTC
+      // Single CTE computes the window function once and aggregates all thresholds in one pass.
+      // Previously this ran 7 separate queries each doing a full window-function scan.
+      const { rows } = await pool.query(`
+        WITH ranked AS (
+          SELECT address, value_sats,
+                 SUM(value_sats) OVER (ORDER BY value_sats DESC) AS cumulative
+          FROM utxos WHERE pubkey_exposed = TRUE
+        )
+        SELECT
+          COUNT(*) FILTER (WHERE cumulative <= 1000000000)                      AS utxo_count_t0,
+          SUM(value_sats) FILTER (WHERE cumulative <= 1000000000)               AS total_sats_t0,
+          COUNT(DISTINCT address) FILTER (WHERE cumulative <= 1000000000)       AS addr_count_t0,
+          MIN(value_sats) FILTER (WHERE cumulative <= 1000000000)               AS min_sats_t0,
+          COUNT(*) FILTER (WHERE cumulative <= 10000000000)                     AS utxo_count_t1,
+          SUM(value_sats) FILTER (WHERE cumulative <= 10000000000)              AS total_sats_t1,
+          COUNT(DISTINCT address) FILTER (WHERE cumulative <= 10000000000)      AS addr_count_t1,
+          MIN(value_sats) FILTER (WHERE cumulative <= 10000000000)              AS min_sats_t1,
+          COUNT(*) FILTER (WHERE cumulative <= 100000000000)                    AS utxo_count_t2,
+          SUM(value_sats) FILTER (WHERE cumulative <= 100000000000)             AS total_sats_t2,
+          COUNT(DISTINCT address) FILTER (WHERE cumulative <= 100000000000)     AS addr_count_t2,
+          MIN(value_sats) FILTER (WHERE cumulative <= 100000000000)             AS min_sats_t2,
+          COUNT(*) FILTER (WHERE cumulative <= 1000000000000)                   AS utxo_count_t3,
+          SUM(value_sats) FILTER (WHERE cumulative <= 1000000000000)            AS total_sats_t3,
+          COUNT(DISTINCT address) FILTER (WHERE cumulative <= 1000000000000)    AS addr_count_t3,
+          MIN(value_sats) FILTER (WHERE cumulative <= 1000000000000)            AS min_sats_t3,
+          COUNT(*) FILTER (WHERE cumulative <= 10000000000000)                  AS utxo_count_t4,
+          SUM(value_sats) FILTER (WHERE cumulative <= 10000000000000)           AS total_sats_t4,
+          COUNT(DISTINCT address) FILTER (WHERE cumulative <= 10000000000000)   AS addr_count_t4,
+          MIN(value_sats) FILTER (WHERE cumulative <= 10000000000000)           AS min_sats_t4,
+          COUNT(*) FILTER (WHERE cumulative <= 100000000000000)                 AS utxo_count_t5,
+          SUM(value_sats) FILTER (WHERE cumulative <= 100000000000000)          AS total_sats_t5,
+          COUNT(DISTINCT address) FILTER (WHERE cumulative <= 100000000000000)  AS addr_count_t5,
+          MIN(value_sats) FILTER (WHERE cumulative <= 100000000000000)          AS min_sats_t5,
+          COUNT(*)                                                               AS utxo_count_max,
+          COALESCE(SUM(value_sats), 0)                                          AS total_sats_max,
+          COUNT(DISTINCT address)                                                AS addr_count_max,
+          MIN(value_sats)                                                        AS min_sats_max
+        FROM ranked
+      `);
+
+      const r = rows[0];
+      const thresholdDefs = [
+        { suffix: 't0', threshold: '1000000000' },
+        { suffix: 't1', threshold: '10000000000' },
+        { suffix: 't2', threshold: '100000000000' },
+        { suffix: 't3', threshold: '1000000000000' },
+        { suffix: 't4', threshold: '10000000000000' },
+        { suffix: 't5', threshold: '100000000000000' },
       ];
 
-      const breakpoints = [];
-      for (const threshold of thresholds) {
-        const { rows } = await pool.query(`
-          SELECT COUNT(*) utxo_count, SUM(value_sats) total_sats,
-                 COUNT(DISTINCT address) address_count,
-                 MIN(value_sats) min_value_sats
-          FROM (
-            SELECT address, value_sats, SUM(value_sats) OVER (ORDER BY value_sats DESC) cumulative
-            FROM utxos WHERE pubkey_exposed = TRUE
-          ) sub
-          WHERE cumulative <= $1
-        `, [threshold]);
+      const breakpoints = thresholdDefs
+        .filter(({ suffix }) => parseInt(r[`utxo_count_${suffix}`]) > 0)
+        .map(({ suffix, threshold }) => ({
+          threshold_sats: threshold,
+          utxo_count: r[`utxo_count_${suffix}`].toString(),
+          total_sats: (r[`total_sats_${suffix}`] ?? '0').toString(),
+          address_count: r[`addr_count_${suffix}`].toString(),
+          min_value_sats: (r[`min_sats_${suffix}`] ?? '0').toString(),
+        }));
 
-        if (rows[0].utxo_count > 0) {
-          breakpoints.push({
-            threshold_sats: threshold.toString(),
-            utxo_count: rows[0].utxo_count.toString(),
-            total_sats: rows[0].total_sats?.toString() ?? '0',
-            address_count: rows[0].address_count.toString(),
-            min_value_sats: rows[0].min_value_sats?.toString() ?? '0',
-          });
-        }
-      }
-
-      // Add max (all exposed)
-      const { rows: maxRows } = await pool.query(`
-        SELECT COUNT(*) utxo_count, COALESCE(SUM(value_sats), 0) total_sats,
-               COUNT(DISTINCT address) address_count, MIN(value_sats) min_value_sats
-        FROM utxos WHERE pubkey_exposed = TRUE
-      `);
       breakpoints.push({
-        threshold_sats: maxRows[0].total_sats?.toString() ?? '0',
-        utxo_count: maxRows[0].utxo_count.toString(),
-        total_sats: maxRows[0].total_sats?.toString() ?? '0',
-        address_count: maxRows[0].address_count.toString(),
-        min_value_sats: maxRows[0].min_value_sats?.toString() ?? '0',
+        threshold_sats: (r.total_sats_max ?? '0').toString(),
+        utxo_count: r.utxo_count_max.toString(),
+        total_sats: (r.total_sats_max ?? '0').toString(),
+        address_count: r.addr_count_max.toString(),
+        min_value_sats: (r.min_sats_max ?? '0').toString(),
       });
 
       return { breakpoints };
@@ -305,19 +323,19 @@ router.get('/concentration', async (req: Request, res: Response) => {
 
     const data = await withCache(cacheKey, 300, async () => {
       const { rows } = await pool.query(`
-        SELECT address, SUM(value_sats) balance, COUNT(*) utxo_count,
-               MIN(block_timestamp) first_seen, MAX(block_timestamp) last_active
-        FROM utxos WHERE address IS NOT NULL
-        GROUP BY address HAVING SUM(value_sats) >= $1
-        ORDER BY balance DESC LIMIT 100
+        SELECT address, utxo_value_sats AS balance, utxo_count,
+               first_seen_block, last_active_block
+        FROM address_info
+        WHERE utxo_value_sats >= $1 AND utxo_count > 0
+        ORDER BY utxo_value_sats DESC LIMIT 100
       `, [minSats]);
 
       return rows.map(r => ({
         address: r.address,
         balance: r.balance.toString(),
         utxo_count: r.utxo_count.toString(),
-        first_seen: r.first_seen,
-        last_active: r.last_active,
+        first_seen_block: r.first_seen_block,
+        last_active_block: r.last_active_block,
       }));
     });
     res.json(data);

@@ -1,6 +1,6 @@
 import { upsertBlock } from '../db/blocks.js';
 import { insertUtxo, deleteUtxo, markAddressPubkeyExposed as markUtxosPubkey } from '../db/utxos.js';
-import { upsertAddressInfo, markAddressPubkeyExposed as markAddrPubkey } from '../db/address-info.js';
+import { upsertAddressInfo, markAddressPubkeyExposed as markAddrPubkey, markAddressP2PKExposed } from '../db/address-info.js';
 import { classifyOutput, ClassifierInput } from '../classifiers/index.js';
 import { pool } from '../db/index.js';
 
@@ -141,6 +141,9 @@ export async function processBlock(block: any, knownBurnAddresses: Set<string>):
 
         if (address) {
           await upsertAddressInfo(client, address, blockNumber, true, valueSats);
+          if (p2pkPubkey !== null) {
+            await markAddressP2PKExposed(client, address);
+          }
         }
       }
     }

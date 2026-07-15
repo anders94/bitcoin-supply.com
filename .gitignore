@@ -17,3 +17,8 @@ nohup.out
 
 # OS
 .DS_Store
+
+# runt
+run
+log/
+supervise/
