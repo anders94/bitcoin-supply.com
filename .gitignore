@@ -17,3 +17,13 @@ nohup.out
 
 # OS
 .DS_Store
+
+# runit
+log/
+supervise/
+run
+
+# misc
+*.txt
+*~
+.*~
