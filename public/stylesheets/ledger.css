@@ -28,6 +28,9 @@
 
 * { box-sizing: border-box; }
 
+/* Author display rules (e.g. .inset's flex) must not defeat the hidden attribute. */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   padding: 0;
