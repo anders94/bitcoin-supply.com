@@ -38,7 +38,18 @@ export async function markAddressPubkeyExposed(
 ): Promise<void> {
   await client.query(`
     UPDATE address_info
-    SET pubkey_hex = $2, pubkey_exposed_at_block = $3, updated_at = now()
+    SET pubkey_hex = $2, pubkey_exposed_at_block = $3, pubkey_exposed = TRUE, updated_at = now()
     WHERE address = $1 AND pubkey_hex IS NULL
   `, [address, pubkeyHex, blockNumber]);
+}
+
+export async function markAddressP2PKExposed(
+  client: PoolClient,
+  address: string
+): Promise<void> {
+  await client.query(`
+    UPDATE address_info
+    SET pubkey_exposed = TRUE, is_p2pk = TRUE, updated_at = now()
+    WHERE address = $1
+  `, [address]);
 }

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../db/index.js';
+import { getComputedStats } from '../db/computed-stats.js';
 import { withCache } from '../services/redis.js';
 import { addSSEClient } from '../services/sse.js';
 import { config } from '../config.js';
@@ -63,8 +64,10 @@ router.get('/loss-spectrum', async (req: Request, res: Response) => {
 
       if (maxBucket === 3 && dormantBefore) {
         params.push(dormantBefore);
+        // Dormancy includes quantum-tagged P2PK (bucket 4): the quantum tag is
+        // an independent lens, not a loss bucket on this axis.
         whereClause = `WHERE (loss_bucket BETWEEN 1 AND 2)
-          OR (loss_bucket = 0 AND block_timestamp <= $1)`;
+          OR (loss_bucket IN (0, 4) AND block_timestamp <= $1)`;
       } else if (maxBucket >= 1) {
         whereClause = `WHERE loss_bucket BETWEEN 1 AND ${maxBucket}`;
       }
@@ -155,16 +158,20 @@ router.get('/dormancy-curve', async (req: Request, res: Response) => {
 router.get('/loss-breakdown', async (req: Request, res: Response) => {
   try {
     const data = await withCache('api:loss-breakdown', 300, async () => {
-      const { rows } = await pool.query(`
-        SELECT unnest(loss_rules) rule, SUM(value_sats) total_sats, COUNT(*) utxo_count
-        FROM utxos WHERE loss_bucket > 0
-        GROUP BY 1 ORDER BY total_sats DESC
-      `);
-      return rows.map(r => ({
+      // Precomputed hourly by the ETL snapshot job (a live unnest over tens of
+      // millions of loss rows is far too slow for request time).
+      const stats = await getComputedStats(['rule_breakdown']);
+      const rules: any[] = stats['rule_breakdown']?.data?.rules ?? [];
+      const miner = stats['rule_breakdown']?.data?.miner_loss;
+      const out = rules.map(r => ({
         rule: r.rule,
         total_sats: r.total_sats.toString(),
         utxo_count: r.utxo_count.toString(),
       }));
+      if (miner && miner.total_sats !== '0') {
+        out.push({ rule: '002', total_sats: miner.total_sats, utxo_count: miner.block_count });
+      }
+      return out.sort((a, b) => (BigInt(b.total_sats) > BigInt(a.total_sats) ? 1 : -1));
     });
     res.json(data);
   } catch (err) {
@@ -183,27 +190,26 @@ router.get('/quantum', async (req: Request, res: Response) => {
         FROM utxos WHERE loss_rules @> '{015}'
       `);
 
-      // Top P2PK addresses
+      // Top P2PK addresses — use pre-aggregated address_info with is_p2pk flag
       const { rows: topP2pk } = await pool.query(`
-        SELECT address, SUM(value_sats) balance, COUNT(*) utxo_count
-        FROM utxos WHERE loss_rules @> '{015}' AND address IS NOT NULL
-        GROUP BY address ORDER BY balance DESC LIMIT 20
+        SELECT address, utxo_value_sats AS balance, utxo_count
+        FROM address_info WHERE is_p2pk = TRUE AND utxo_count > 0
+        ORDER BY utxo_value_sats DESC LIMIT 20
       `);
 
       // Exposed PKH stats (pubkey revealed via prior spend, not P2PK)
       const { rows: exposedRows } = await pool.query(`
-        SELECT COALESCE(SUM(value_sats), 0) total_sats, COUNT(*) utxo_count
-        FROM utxos WHERE pubkey_exposed = TRUE AND NOT (loss_rules @> '{015}')
+        SELECT COALESCE(SUM(utxo_value_sats), 0) total_sats, SUM(utxo_count) utxo_count
+        FROM address_info WHERE pubkey_exposed = TRUE AND is_p2pk = FALSE AND utxo_count > 0
       `);
 
-      // By exposure year
+      // By exposure year — address_info has pubkey_exposed_at_block and pre-aggregated balance
       const { rows: byYear } = await pool.query(`
-        SELECT EXTRACT(YEAR FROM ai.pubkey_exposed_at_block::text::bigint::float8 / 100000 * interval '1 year' + timestamp '2009-01-03') yr,
-               COUNT(DISTINCT u.address) addr_count,
-               SUM(u.value_sats) total_sats
-        FROM utxos u
-        JOIN address_info ai ON ai.address = u.address
-        WHERE u.pubkey_exposed = TRUE AND ai.pubkey_exposed_at_block IS NOT NULL
+        SELECT EXTRACT(YEAR FROM pubkey_exposed_at_block::float8 / 100000 * interval '1 year' + timestamp '2009-01-03') yr,
+               COUNT(*) addr_count,
+               SUM(utxo_value_sats) total_sats
+        FROM address_info
+        WHERE pubkey_exposed_at_block IS NOT NULL AND utxo_count > 0
         GROUP BY 1 ORDER BY 1
       `);
 
@@ -239,56 +245,20 @@ router.get('/quantum', async (req: Request, res: Response) => {
 router.get('/quantum-curve', async (req: Request, res: Response) => {
   try {
     const data = await withCache('api:quantum-curve', 600, async () => {
-      // Cumulative curve sorted by value descending
-      // Breakpoints at cumulative thresholds
-      const thresholds = [
-        1_000_000_000n,       // 10 BTC
-        10_000_000_000n,      // 100 BTC
-        100_000_000_000n,     // 1,000 BTC
-        1_000_000_000_000n,   // 10,000 BTC
-        10_000_000_000_000n,  // 100,000 BTC
-        100_000_000_000_000n, // 1,000,000 BTC
-      ];
-
-      const breakpoints = [];
-      for (const threshold of thresholds) {
-        const { rows } = await pool.query(`
-          SELECT COUNT(*) utxo_count, SUM(value_sats) total_sats,
-                 COUNT(DISTINCT address) address_count,
-                 MIN(value_sats) min_value_sats
-          FROM (
-            SELECT address, value_sats, SUM(value_sats) OVER (ORDER BY value_sats DESC) cumulative
-            FROM utxos WHERE pubkey_exposed = TRUE
-          ) sub
-          WHERE cumulative <= $1
-        `, [threshold]);
-
-        if (rows[0].utxo_count > 0) {
-          breakpoints.push({
-            threshold_sats: threshold.toString(),
-            utxo_count: rows[0].utxo_count.toString(),
-            total_sats: rows[0].total_sats?.toString() ?? '0',
-            address_count: rows[0].address_count.toString(),
-            min_value_sats: rows[0].min_value_sats?.toString() ?? '0',
-          });
-        }
-      }
-
-      // Add max (all exposed)
-      const { rows: maxRows } = await pool.query(`
-        SELECT COUNT(*) utxo_count, COALESCE(SUM(value_sats), 0) total_sats,
-               COUNT(DISTINCT address) address_count, MIN(value_sats) min_value_sats
-        FROM utxos WHERE pubkey_exposed = TRUE
-      `);
-      breakpoints.push({
-        threshold_sats: maxRows[0].total_sats?.toString() ?? '0',
-        utxo_count: maxRows[0].utxo_count.toString(),
-        total_sats: maxRows[0].total_sats?.toString() ?? '0',
-        address_count: maxRows[0].address_count.toString(),
-        min_value_sats: maxRows[0].min_value_sats?.toString() ?? '0',
-      });
-
-      return { breakpoints };
+      // Precomputed hourly by the ETL snapshot job (the window-function scan
+      // over all exposed outputs is far too slow for request time). Response
+      // keeps the original shape; more breakpoints than before.
+      const stats = await getComputedStats(['quantum_curve']);
+      const bps: any[] = stats['quantum_curve']?.data?.breakpoints ?? [];
+      return {
+        breakpoints: bps.map(bp => ({
+          threshold_sats: bp.cum_sats,
+          utxo_count: bp.utxo_count,
+          total_sats: bp.cum_sats,
+          address_count: bp.key_count,
+          min_value_sats: bp.min_value_sats,
+        })),
+      };
     });
     res.json(data);
   } catch (err) {
@@ -305,19 +275,19 @@ router.get('/concentration', async (req: Request, res: Response) => {
 
     const data = await withCache(cacheKey, 300, async () => {
       const { rows } = await pool.query(`
-        SELECT address, SUM(value_sats) balance, COUNT(*) utxo_count,
-               MIN(block_timestamp) first_seen, MAX(block_timestamp) last_active
-        FROM utxos WHERE address IS NOT NULL
-        GROUP BY address HAVING SUM(value_sats) >= $1
-        ORDER BY balance DESC LIMIT 100
+        SELECT address, utxo_value_sats AS balance, utxo_count,
+               first_seen_block, last_active_block
+        FROM address_info
+        WHERE utxo_value_sats >= $1 AND utxo_count > 0
+        ORDER BY utxo_value_sats DESC LIMIT 100
       `, [minSats]);
 
       return rows.map(r => ({
         address: r.address,
         balance: r.balance.toString(),
         utxo_count: r.utxo_count.toString(),
-        first_seen: r.first_seen,
-        last_active: r.last_active,
+        first_seen_block: r.first_seen_block,
+        last_active_block: r.last_active_block,
       }));
     });
     res.json(data);

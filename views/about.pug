@@ -1,0 +1,40 @@
+extends layout
+
+block content
+  .content-narrow(style='display:flex;flex-direction:column;gap:14px')
+    div(style='display:flex;flex-direction:column;gap:4px')
+      span.label ABOUT
+      span.page-title 21 million is the ceiling, not the count.
+
+    .prose
+      p
+        | Bitcoin's supply is usually quoted as if every coin ever issued still circulates. It doesn't. Some coin is
+        span.em-red  provably gone
+        |  — spent to conditions that can never be met, or never created because a miner didn't claim it. Some is
+        span.em  probably gone
+        |  — sent to burn addresses with no known keys. And a large, debatable amount has simply
+        span.em  not moved in a decade or more
+        | .
+      p This site doesn't pick a number for you. Every figure traces to a public classification rule, and the sliders let you decide how much doubt to accept — from mathematical certainty to speculation.
+
+    section.section.section--tight
+      span.label HOW TO CONTRIBUTE
+      div(style='display:flex;flex-direction:column')
+        .step-row
+          span.n 01
+          span.t Propose a new loss classification: open a PR adding a markdown file to #[a(href='https://github.com/anders94/bitcoin-supply.com-2/tree/main/proposals') proposals/] in the GitHub repo.
+        .step-row
+          span.n 02
+          span.t Debate happens in PR comments. Challenge scale estimates, evidence, and edge cases.
+        .step-row
+          span.n 03
+          span.t Proposals that reach finality are implemented as detectors and their figures appear on this site.
+      a.ext-link(href='https://github.com/anders94/bitcoin-supply.com-2') GITHUB.COM/ANDERS94/BITCOIN-SUPPLY.COM-2 →
+
+    section.section.section--tight
+      span.label METHODOLOGY
+      p(style='margin:0;font-size:11.5px;line-height:1.6;color:var(--body-dark)') Figures are computed from a fully-indexed Bitcoin Core node. Every UTXO is run through the classifier pipeline; dormancy is computed at query time, never stored. Nothing here is an estimate unless labeled as one.
+
+    .credit
+      span.by BUILT BY #[a(href='https://andersbrownworth.com') ANDERS BROWNWORTH]
+      span.lic MIT LICENSE

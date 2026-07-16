@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { runHistoricalSync } from './historical-sync.js';
 import { runLiveSync } from './live-sync.js';
 import { updateSnapshots } from './snapshot-updater.js';
@@ -14,6 +15,7 @@ async function main() {
   } else if (mode === 'live') {
     // Run snapshot updater hourly
     setInterval(updateSnapshots, 60 * 60 * 1000);
+    console.log('Computing initial snapshots...');
     await updateSnapshots(); // Initial run
     await runLiveSync(); // Blocks forever
   } else if (mode === 'snapshot') {

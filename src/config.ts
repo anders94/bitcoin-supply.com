@@ -27,6 +27,7 @@ export const config = {
   etl: {
     concurrency: parseInt(process.env.ETL_CONCURRENCY || '8'),
     batchSize: parseInt(process.env.ETL_BATCH_SIZE || '1000'),
+    confirmationLag: parseInt(process.env.ETL_CONFIRMATION_LAG || '6'),
   },
   // Max possible supply in satoshis (2099999997690000)
   maxSupplySats: 2099999997690000n,

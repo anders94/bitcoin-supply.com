@@ -1,66 +1,44 @@
 extends layout
 
 block content
-  .container
+  .page-head
+    span.label ADDRESS
+    span.hash= addr
 
-    h2.mb-1 Address
-    .hash-display.mb-4= addr
+  if isQuantumVulnerable
+    .alert-inset
+      span(style='color:var(--purple);font-weight:600') Quantum exposed:
+      |  this address has revealed its public key in a prior spend. A sufficiently powerful quantum computer could derive the private key.
+      if addrInfo && addrInfo.pubkey_hex
+        br
+        span.hash(style='font-size:8.5px;color:var(--faded)') pubkey #{addrInfo.pubkey_hex}
 
-    if isQuantumVulnerable
-      .alert.alert-danger.mb-4
-        strong ⚡ Quantum Vulnerable:&nbsp;
-        | This address has had its public key revealed in a prior transaction spend.
-        | A sufficiently powerful quantum computer could derive the private key.
-        if addrInfo && addrInfo.pubkey_hex
-          br
-          small.text-mono Public key: #{addrInfo.pubkey_hex}
+  .rows(style='font-size:10px')
+    .row.row--dotted
+      span.k balance
+      span(style='font-weight:600') #{btc8(totalBalance)} BTC
+    .row.row--dotted
+      span.k utxos
+      span= num(totalUtxos)
+    .row.row--dotted
+      span.k first seen block
+      span= addrInfo ? num(addrInfo.first_seen_block) : '—'
+    .row.row--dotted
+      span.k last active block
+      span= addrInfo ? num(addrInfo.last_active_block) : '—'
 
-    .row.mb-4
-      .col-md-3
-        .metric-card
-          .metric-value.text-warning= formatBtc(BigInt(totalBalance))
-          .metric-label Balance (BTC)
-      .col-md-3
-        .metric-card
-          .metric-value= utxos.length
-          .metric-label UTXOs (showing)
-      .col-md-3
-        .metric-card
-          .metric-value= addrInfo ? addrInfo.first_seen_block : '—'
-          .metric-label First Seen Block
-      .col-md-3
-        .metric-card
-          .metric-value= addrInfo ? addrInfo.last_active_block : '—'
-          .metric-label Last Active Block
-
-    if utxos.length > 0
-      .card
-        .card-header UTXOs
-        .card-body.p-0
-          .table-responsive
-            table.table.tx-table.mb-0
-              thead
-                tr
-                  th Txid
-                  th Output
-                  th Value (BTC)
-                  th Block
-                  th Date
-                  th Classification
-              tbody
-                each u in utxos
-                  tr(class=u.loss_bucket === 1 ? 'table-danger' : u.loss_bucket === 4 ? 'table-warning' : '')
-                    td
-                      a.hash-short(href=`/transaction/${u.tx_hash}`)= u.tx_hash.slice(0, 16) + '...'
-                    td= u.output_index
-                    td.btc-amount.text-warning= formatBtc(BigInt(u.value_sats))
-                    td
-                      a(href=`/block/${u.block_number}`)= u.block_number
-                    td.timestamp= new Date(u.block_timestamp).toLocaleDateString('en-US')
-                    td
-                      each rule in u.loss_rules
-                        a.badge.bg-danger.me-1.text-decoration-none(href=`/proposals/${rule}`)= rule
-                      if u.pubkey_exposed && u.loss_rules.length === 0
-                        span.badge.bg-info Quantum
-    else
-      .alert.alert-success No UTXOs found for this address.
+  section.section.section--tight
+    span.label UTXOS · LARGEST #{utxos.length} SHOWN
+    .rows(style='font-size:10px')
+      if utxos.length
+        each u in utxos
+          .event-row
+            a.txid(href=`/transaction/${u.tx_hash}`) #{shortHash(u.tx_hash)} : #{u.output_index}
+            a.blk(href=`/block/${u.block_number}`)= num(u.block_number)
+            each rule in u.loss_rules
+              span.chip(class=ruleCategory(rule) === 'probable' ? 'chip--amber' : ruleCategory(rule) === 'quantum' ? 'chip--purple' : 'chip--red')= ruleChip(rule)
+            if u.pubkey_exposed && !u.loss_rules.length
+              span.chip.chip--purple Q-EXPOSED
+            span.amt= btc8(u.value_sats)
+      else
+        .row.row--dotted.row--zero no unspent outputs at this address

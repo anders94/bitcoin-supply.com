@@ -1,9 +1,11 @@
-import * as zmq from 'zeromq';
-import { getBlock } from '../services/bitcoin-rpc.js';
+import { getBlock, getBlockHash, getBlockCount } from '../services/bitcoin-rpc.js';
 import { processBlock } from './block-processor.js';
-import { broadcastSSE } from '../services/sse.js';
+import { publishSSE } from '../services/sse.js';
 import { pool } from '../db/index.js';
 import { config } from '../config.js';
+import { getLastSyncedBlock, setLastSyncedBlock } from './historical-sync.js';
+
+const POLL_INTERVAL_MS = 60_000;
 
 async function loadKnownBurnAddresses(): Promise<Set<string>> {
   const { rows } = await pool.query('SELECT address FROM known_burn_addresses');
@@ -15,41 +17,42 @@ export async function runLiveSync(): Promise<void> {
 
   while (true) {
     try {
-      const sock = new zmq.Subscriber();
-      sock.connect(config.zmq.address);
-      sock.subscribe('sequence');
+      const chainTip = await getBlockCount();
+      const confirmedTip = chainTip - config.etl.confirmationLag;
+      const lastSynced = await getLastSyncedBlock();
 
-      console.log(`ZMQ live sync connected to ${config.zmq.address}`);
+      if (lastSynced === -1) {
+        console.warn('No historical sync checkpoint found. Starting from genesis. Consider running historical sync first.');
+      }
 
-      for await (const [topic, message] of sock) {
-        if (topic.toString() === 'sequence') {
-          // Block connected: frame starts with 0x43 ('C')
-          if (message[0] === 0x43) {
-            // Next 32 bytes are the block hash in little-endian
-            const hashBytes = message.slice(1, 33);
-            const hash = Buffer.from(hashBytes).reverse().toString('hex');
+      const pending = confirmedTip - lastSynced;
+      const now = new Date().toISOString();
+      if (pending > 0) {
+        console.log(`${now} poll: tip=${chainTip} confirmed=${confirmedTip} synced=${lastSynced} (${pending} to process)`);
+      } else {
+        console.log(`${now} poll: tip=${chainTip} confirmed=${confirmedTip} synced=${lastSynced} (up to date, lag=${config.etl.confirmationLag})`);
+      }
 
-            try {
-              const block = await getBlock(hash);
-              await processBlock(block, knownBurnAddresses);
+      for (let height = lastSynced + 1; height <= confirmedTip; height++) {
+        const hash = await getBlockHash(height);
+        const block = await getBlock(hash);
+        await processBlock(block, knownBurnAddresses);
+        await setLastSyncedBlock(height);
 
-              broadcastSSE({
-                type: 'block',
-                block_number: block.height,
-                block_hash: hash,
-                tx_count: block.tx.length,
-              });
+        await publishSSE({
+          type: 'block',
+          block_number: block.height,
+          block_hash: hash,
+          tx_count: block.tx.length,
+          block_timestamp: new Date(block.time * 1000).toISOString(),
+        });
 
-              console.log(`Live block ${block.height}: ${hash}`);
-            } catch (err) {
-              console.error(`Error processing block ${hash}:`, err);
-            }
-          }
-        }
+        console.log(`Live block ${block.height}: ${hash}`);
       }
     } catch (err) {
-      console.error('ZMQ connection error, reconnecting in 5s:', err);
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      console.error('Live sync error:', err);
     }
+
+    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
   }
 }
