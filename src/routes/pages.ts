@@ -73,11 +73,9 @@ router.get('/', async (req: Request, res: Response) => {
       LIMIT 4
     `);
 
-    const dormancyCurve = [1, 3, 5, 7, 10, 15, 20].map(years => {
-      const snap = snapshots[`dormant_${years}y`];
-      return snap
-        ? { years, total_sats: snap.total_sats.toString(), utxo_count: snap.utxo_count.toString() }
-        : { years, total_sats: '0', utxo_count: '0' };
+    const snap = (key: string) => ({
+      sats: (snapshots[key]?.total_sats ?? 0n).toString(),
+      count: (snapshots[key]?.utxo_count ?? 0n).toString(),
     });
 
     const all = snap('all_utxos');
@@ -166,19 +164,15 @@ router.get('/', async (req: Request, res: Response) => {
     };
 
     res.render('index', {
-      title: 'bitcoin supply',
-      latestBlock,
-      provably_lost_sats: (snapshots['provably_lost']?.total_sats ?? 0n).toString(),
-      provably_lost_count: (snapshots['provably_lost']?.utxo_count ?? 0n).toString(),
-      probably_lost_sats: (snapshots['probably_lost']?.total_sats ?? 0n).toString(),
-      probably_lost_count: (snapshots['probably_lost']?.utxo_count ?? 0n).toString(),
-      all_utxos_sats: (snapshots['all_utxos']?.total_sats ?? 0n).toString(),
-      all_utxos_count: (snapshots['all_utxos']?.utxo_count ?? 0n).toString(),
-      quantum_total_sats: (snapshots['quantum_all_exposed']?.total_sats ?? 0n).toString(),
-      dormancy_curve: JSON.stringify(dormancyCurve),
-      recent_losses: recentLosses,
-      formatBtc,
-      satsToBtc,
+      title: 'bitcoin-supply — effective supply explorer',
+      supplyJson: safeJson(supply),
+      supply,
+      ssr,
+      recentLosses,
+      topLosses: stats['top_losses']?.data?.entries ?? [],
+      halvings: stats['halvings']?.data?.events ?? [],
+      freshness: supply.computed_at,
+      ...viewHelpers,
     });
   } catch (err) {
     console.error(err);
@@ -474,7 +468,7 @@ router.get('/quantum', async (req: Request, res: Response) => {
     const snapshots = await getAllSnapshots();
     const { rows: topExposed } = await pool.query(`
       SELECT address, utxo_value_sats AS balance, utxo_count,
-             pubkey_hex, pubkey_exposed_at_block, is_p2pk
+             pubkey_exposed_at_block, is_p2pk
       FROM address_info
       WHERE pubkey_exposed = TRUE AND utxo_count > 0
       ORDER BY utxo_value_sats DESC LIMIT 100
