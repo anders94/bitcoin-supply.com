@@ -22,6 +22,13 @@ export function computeBucket(rules: RuleId[]): LossBucket {
 }
 
 export function classifyOutput(ctx: ClassifierInput): { rules: RuleId[], bucket: LossBucket } {
+  // A zero-value output destroys nothing, so no loss rule can apply to it —
+  // Proposal 004 says as much ("UTXOs with a positive value"), and the same
+  // holds for every other rule: you cannot lose supply that was never there.
+  // Without this, ~238M zero-value OP_RETURN data carriers counted as
+  // provably lost, each contributing 0 sats but inflating every loss count.
+  if (ctx.value_sats === 0n) return { rules: [], bucket: 0 };
+
   const classifiers: Array<(c: ClassifierInput) => RuleId | null> = [
     classifyGenesisBlock, classifyDuplicateCoinbase, classifyMtGoxScript,
     classifyOpReturn, classifyOpVerifAbort, classifyOffCurvePk,

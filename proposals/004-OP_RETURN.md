@@ -17,10 +17,14 @@ blockchain. While these outputs usually have a value of '0', some consume positi
 by nature unspendable so represent provably lost supply.
 
 ## Implementation
-These UTXOs can be identified by checking to see if `script_asm` starts with `OP_RETURN `:
+These UTXOs can be identified by checking to see if `script_asm` starts with `OP_RETURN `, **and**
+that the output carries a positive value:
 ```
-output.script_asm.startsWith('OP_RETURN ')
+output.value_sats > 0 && output.script_asm.startsWith('OP_RETURN ')
 ```
+The value test is not optional. The overwhelming majority of `OP_RETURN` outputs are pure data
+carriers worth 0, which destroy no supply and are therefore not a loss under this proposal — only
+the minority that consume a positive amount are. Zero-value outputs are not recorded at all.
 
 ## Example
 Transaction `139c004f477101c468767983536caaeef568613fab9c2ed9237521f5ff530afd` has the following

@@ -73,11 +73,15 @@ export async function processBlock(block: any, knownBurnAddresses: Set<string>):
           // Delete the spent UTXO
           await deleteUtxo(client, vin.txid, vin.vout);
 
-          // Update address activity
+          // Update address activity. Zero-value outputs are never inserted (see
+          // the output loop), so they were never counted in address_info —
+          // decrementing on their spend would corrupt the count. Skip them.
           if (vin.prevout?.scriptPubKey?.address) {
             const addr = vin.prevout.scriptPubKey.address;
             const spentSats = BigInt(Math.round(vin.prevout.value * 1e8));
-            await upsertAddressInfo(client, addr, blockNumber, false, spentSats);
+            if (spentSats > 0n) {
+              await upsertAddressInfo(client, addr, blockNumber, false, spentSats);
+            }
           }
 
           // Detect pubkey exposure
@@ -105,6 +109,13 @@ export async function processBlock(block: any, knownBurnAddresses: Set<string>):
         const scriptType: string = vout.scriptPubKey.type || 'nonstandard';
         const address: string | null = vout.scriptPubKey.address || null;
         const valueSats = BigInt(Math.round(vout.value * 1e8));
+
+        // Zero-value outputs hold no supply, so they are not tracked. This is
+        // mostly OP_RETURN data carriers (~59% of all outputs ever created);
+        // Bitcoin Core likewise never puts them in the UTXO set. Skipping them
+        // here keeps the table to outputs that actually carry coin. The spend
+        // path above has the matching guard.
+        if (valueSats === 0n) continue;
 
         const ctx: ClassifierInput = {
           block_number: blockNumber,
