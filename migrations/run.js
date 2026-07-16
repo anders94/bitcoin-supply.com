@@ -12,6 +12,7 @@ const MIGRATIONS = [
   '003-address-info-exposure.sql',
   '004-redesign-stats.sql',
   '005-losses-order-index.sql',
+  '006-address-value-index.sql',
 ];
 
 async function run() {

@@ -440,13 +440,18 @@ router.get('/address/:addr', async (req: Request, res: Response) => {
       ORDER BY value_sats DESC LIMIT 100
     `, [addr]);
 
-    const totalBalance = utxos.reduce((sum: bigint, u: any) => sum + BigInt(u.value_sats), 0n);
+    // address_info has exact pre-aggregated totals; the LIMIT-100 sum would
+    // understate addresses holding more UTXOs than the page shows.
+    const totalBalance = addrInfo
+      ? BigInt(addrInfo.utxo_value_sats ?? 0)
+      : utxos.reduce((sum: bigint, u: any) => sum + BigInt(u.value_sats), 0n);
 
     res.render('address', {
       title: `Address ${addr.slice(0, 20)}…`,
       addr,
       addrInfo,
       utxos,
+      totalUtxos: addrInfo ? Number(addrInfo.utxo_count) : utxos.length,
       totalBalance: totalBalance.toString(),
       isQuantumVulnerable: addrInfo?.pubkey_hex != null,
       ...viewHelpers,

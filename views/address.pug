@@ -18,8 +18,8 @@ block content
       span.k balance
       span(style='font-weight:600') #{btc8(totalBalance)} BTC
     .row.row--dotted
-      span.k utxos shown
-      span= utxos.length
+      span.k utxos
+      span= num(totalUtxos)
     .row.row--dotted
       span.k first seen block
       span= addrInfo ? num(addrInfo.first_seen_block) : '—'
@@ -28,7 +28,7 @@ block content
       span= addrInfo ? num(addrInfo.last_active_block) : '—'
 
   section.section.section--tight
-    span.label UTXOS
+    span.label UTXOS · LARGEST #{utxos.length} SHOWN
     .rows(style='font-size:10px')
       if utxos.length
         each u in utxos
