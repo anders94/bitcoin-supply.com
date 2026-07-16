@@ -24,6 +24,8 @@ export const config = {
   server: {
     host: process.env.HOST || '0.0.0.0',
     port: parseInt(process.env.PORT || '3000'),
+    // Canonical origin for absolute URLs (Open Graph, canonical links).
+    publicUrl: (process.env.PUBLIC_URL || 'https://bitcoin-supply.com').replace(/\/+$/, ''),
   },
   etl: {
     concurrency: parseInt(process.env.ETL_CONCURRENCY || '8'),

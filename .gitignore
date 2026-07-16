@@ -23,6 +23,9 @@ log/
 supervise/
 run
 
+# OG card generator font cache (fetched on first run)
+scripts/.fonts/
+
 # misc
 *.txt
 *~

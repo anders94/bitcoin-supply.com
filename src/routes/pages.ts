@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { marked } from 'marked';
+import { config } from '../config.js';
 import { pool } from '../db/index.js';
 import { getAllSnapshots } from '../db/snapshots.js';
 import { getComputedStats } from '../db/computed-stats.js';
@@ -26,6 +27,24 @@ const viewHelpers = {
   ruleChip: (rule: string) => `${rule} ${RULE_CHIP_LABELS[rule] ?? ''}`.trim(),
   ruleCategory,
 };
+
+const OG_DEFAULT_DESCRIPTION =
+  'Tracking Bitcoin’s effective supply: how much of the 21M cap is provably lost, ' +
+  'probably lost, dormant, or exposed to a quantum attacker — measured UTXO by UTXO ' +
+  'from full-chain analysis.';
+
+// Social-preview metadata. Routes overwrite `description` (and occasionally
+// `ogTitle`) on res.locals.meta; the layout renders the tags.
+router.use((req: Request, res: Response, next) => {
+  res.locals.meta = {
+    type: 'website',
+    url: config.server.publicUrl + req.originalUrl,
+    image: config.server.publicUrl + '/images/og-card.png',
+    imageAlt: 'bitcoin-supply — the effective Bitcoin supply explorer',
+    description: OG_DEFAULT_DESCRIPTION,
+  };
+  next();
+});
 
 // Every page's header shows the live tip; seed it via SSR on each request.
 router.use(async (req: Request, res: Response, next) => {
@@ -163,6 +182,14 @@ router.get('/', async (req: Request, res: Response) => {
       },
     };
 
+    res.locals.meta.ogTitle = 'bitcoin-supply — the effective Bitcoin supply explorer';
+    res.locals.meta.description =
+      `Bitcoin’s effective supply is ${btc2(effSats)} BTC as of block ` +
+      `${num(res.locals.tip.height)}: ${btc2(provable.sats)} BTC is provably lost, ` +
+      `another ${btc2(BigInt(probable.sats) - BigInt(provable.sats))} BTC probably lost, ` +
+      `and ${btc2(exposed.sats)} BTC is exposed to a quantum attacker. ` +
+      'Explore losses, dormancy and quantum exposure block by block.';
+
     res.render('index', {
       title: 'bitcoin-supply — effective supply explorer',
       supplyJson: safeJson(supply),
@@ -222,6 +249,16 @@ router.get('/block/:n', async (req: Request, res: Response) => {
     const minerLoss = BigInt(block.miner_loss_sats ?? 0);
     const txLoss = BigInt(txLossRows[0].total);
 
+    const removed = minerLoss + txLoss;
+    res.locals.meta.description = removed > 0n
+      ? `Block ${num(blockNum)} (${dateUtc(block.block_timestamp)}) removed ` +
+        `${btc8(removed)} BTC from Bitcoin’s effective supply` +
+        (minerLoss > 0n ? ` — including ${btc8(minerLoss)} BTC the miner never claimed` : '') +
+        '. See every lost output in this block.'
+      : `Block ${num(blockNum)} (${dateUtc(block.block_timestamp)}): ` +
+        `${btc8(subsidy)} BTC subsidy, ${btc8(fees)} BTC in fees, no coins lost. ` +
+        'Supply accounting on bitcoin-supply.';
+
     res.render('block', {
       title: `Block ${num(blockNum)}`,
       block,
@@ -232,7 +269,7 @@ router.get('/block/:n', async (req: Request, res: Response) => {
       claimed: (block.coinbase_value_sats ?? 0).toString(),
       minerLoss: minerLoss.toString(),
       txLoss: txLoss.toString(),
-      removedTotal: (minerLoss + txLoss).toString(),
+      removedTotal: removed.toString(),
       pager: {
         prev: prevLoss,
         prevSkipped: prevLoss != null ? blockNum - prevLoss - 1 : null,
@@ -312,6 +349,14 @@ router.get('/losses', async (req: Request, res: Response) => {
 
     const totalPages = Math.min(MAX_PAGE, Math.max(1, Math.ceil(Number(total) / perPage)));
 
+    const lostSats = (snapshots['probably_lost']?.total_sats ?? 0n).toString();
+    res.locals.meta.description =
+      (filterRule
+        ? `${num(total)} Bitcoin loss events under rule ${viewHelpers.ruleChip(filterRule)}`
+        : `${num(total)} recorded Bitcoin loss events totaling ${btc2(lostSats)} BTC`) +
+      ' — every provably or probably lost output on the blockchain, newest first.' +
+      (page > 1 ? ` Page ${num(page)} of ${num(totalPages)}.` : '');
+
     res.render('losses', {
       title: 'Loss history',
       losses: rows,
@@ -372,9 +417,15 @@ router.get('/utxos', async (req: Request, res: Response) => {
       count: matrix.count.length ? matrixCells(matrix.count, false) : [],
     };
 
+    const utxoCount = (snapshots['all_utxos']?.utxo_count ?? 0n).toString();
+    res.locals.meta.description =
+      `The Bitcoin UTXO set under a microscope: ${num(utxoCount)} unspent outputs ` +
+      'mapped by age and value, the dormant giants that never move, and the ' +
+      'year-by-year growth of provably lost coin.';
+
     res.render('utxos', {
       title: 'The UTXO set',
-      utxoCount: (snapshots['all_utxos']?.utxo_count ?? 0n).toString(),
+      utxoCount,
       cells,
       cellsJson: safeJson(cells),
       giants: stats['dormant_giants']?.data?.giants ?? [],
@@ -393,6 +444,10 @@ router.get('/utxos', async (req: Request, res: Response) => {
 
 // GET /about
 router.get('/about', (req: Request, res: Response) => {
+  res.locals.meta.description =
+    'How bitcoin-supply.com works: the methodology, data pipeline and ' +
+    'classification rules behind its estimates of lost, dormant and ' +
+    'quantum-vulnerable Bitcoin.';
   res.render('about', { title: 'About', ...viewHelpers });
 });
 
@@ -413,6 +468,16 @@ router.get('/transaction/:hash', async (req: Request, res: Response) => {
     `, [txHash]);
     const utxoMap: Record<number, any> = {};
     for (const row of utxoRows) utxoMap[row.output_index] = row;
+
+    const outTotal = (tx.vout ?? []).reduce((s: number, v: any) => s + (v.value ?? 0), 0);
+    const lostOutputs = utxoRows.filter((r: any) => r.loss_bucket === 1 || r.loss_bucket === 2).length;
+    res.locals.meta.description =
+      `Bitcoin transaction ${shortHash(txHash)}: ${num((tx.vout ?? []).length)} outputs ` +
+      `totaling ${outTotal.toLocaleString('en-US', { maximumFractionDigits: 8 })} BTC` +
+      (lostOutputs > 0
+        ? `, ${num(lostOutputs)} of them classified as lost coin.`
+        : '.') +
+      ' Output-level supply accounting on bitcoin-supply.';
 
     res.render('transaction', {
       title: `Transaction ${txHash.slice(0, 16)}…`,
@@ -446,12 +511,21 @@ router.get('/address/:addr', async (req: Request, res: Response) => {
       ? BigInt(addrInfo.utxo_value_sats ?? 0)
       : utxos.reduce((sum: bigint, u: any) => sum + BigInt(u.value_sats), 0n);
 
+    const totalUtxos = addrInfo ? Number(addrInfo.utxo_count) : utxos.length;
+    res.locals.meta.description =
+      `Bitcoin address ${shortAddress(addr)}: ${btc8(totalBalance)} BTC unspent across ` +
+      `${num(totalUtxos)} UTXO${totalUtxos === 1 ? '' : 's'}` +
+      (addrInfo?.pubkey_hex != null
+        ? ' — public key exposed, making this balance quantum-vulnerable.'
+        : '.') +
+      ' Supply status on bitcoin-supply.';
+
     res.render('address', {
       title: `Address ${addr.slice(0, 20)}…`,
       addr,
       addrInfo,
       utxos,
-      totalUtxos: addrInfo ? Number(addrInfo.utxo_count) : utxos.length,
+      totalUtxos,
       totalBalance: totalBalance.toString(),
       isQuantumVulnerable: addrInfo?.pubkey_hex != null,
       ...viewHelpers,
@@ -474,11 +548,18 @@ router.get('/quantum', async (req: Request, res: Response) => {
       ORDER BY utxo_value_sats DESC LIMIT 100
     `);
 
+    const exposedSats = (snapshots['quantum_all_exposed']?.total_sats ?? 0n).toString();
+    const p2pkSats = (snapshots['quantum_p2pk']?.total_sats ?? 0n).toString();
+    res.locals.meta.description =
+      `${btc2(exposedSats)} BTC sits in addresses whose public keys are already ` +
+      `exposed on-chain — including ${btc2(p2pkSats)} BTC in early pay-to-pubkey ` +
+      'outputs. Explore what a quantum attacker could reach, key by key.';
+
     res.render('quantum', {
       title: 'Quantum exposure',
-      p2pkSats: (snapshots['quantum_p2pk']?.total_sats ?? 0n).toString(),
+      p2pkSats,
       p2pkCount: (snapshots['quantum_p2pk']?.utxo_count ?? 0n).toString(),
-      exposedSats: (snapshots['quantum_all_exposed']?.total_sats ?? 0n).toString(),
+      exposedSats,
       exposedCount: (snapshots['quantum_all_exposed']?.utxo_count ?? 0n).toString(),
       topExposed,
       ...viewHelpers,
@@ -525,6 +606,10 @@ router.get('/proposals', (req: Request, res: Response) => {
       scale: p.fields['Scale Estimate'] ?? '—',
       chipClass: CATEGORY_CHIP_CLASS[(p.fields['Category'] ?? '').toUpperCase()] ?? 'chip--gray',
     }));
+    res.locals.meta.description =
+      `The bitcoin-supply rulebook: ${num(proposals.length)} proposals defining ` +
+      'exactly which coins count as provably lost, probably lost or ' +
+      'quantum-exposed — each with rationale, scale estimate and status.';
     res.render('proposals', { title: 'Proposals', proposals, ...viewHelpers });
   } catch (err) {
     console.error(err);
@@ -557,6 +642,22 @@ router.get('/proposals/:id', async (req: Request, res: Response) => {
         return found ? { label: key, value: meta.fields[found] } : null;
       })
       .filter(Boolean);
+
+    // First body paragraph, flattened to plain text, as the social summary.
+    const firstPara = body
+      .split(/\n\s*\n/)
+      .map(p => p.trim())
+      .find(p => p && !p.startsWith('#'));
+    const summary = (firstPara ?? '')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/[*_`>]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const scale = meta.fields['Scale Estimate'];
+    res.locals.meta.description =
+      `Classification rule ${meta.id}: ${meta.title}` +
+      (scale && scale !== '—' ? ` — estimated scale ${scale}.` : '.') +
+      (summary ? ` ${summary.length > 180 ? summary.slice(0, 177).trimEnd() + '…' : summary}` : '');
 
     res.render('proposal', {
       title: meta.title,
