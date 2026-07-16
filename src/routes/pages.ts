@@ -598,4 +598,7 @@ router.post('/search', async (req: Request, res: Response) => {
 
 router.get('/search', (req: Request, res: Response) => res.redirect('/'));
 
+// Catch-all 404 in the site's own error style.
+router.use((req: Request, res: Response) => renderError(res, 404, 'Page not found'));
+
 export default router;
