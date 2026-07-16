@@ -12,6 +12,21 @@ const app = express();
 app.set('view engine', 'pug');
 app.set('views', path.join(process.cwd(), 'views'));
 
+// One line per request. svlogd (-tt) prefixes the timestamp, so don't add one.
+app.use((req, res, next) => {
+  const start = performance.now();
+  let logged = false;
+  const log = () => {
+    if (logged) return; // 'finish' and 'close' can both fire
+    logged = true;
+    const ms = (performance.now() - start).toFixed(1);
+    console.log(`${req.method} ${req.originalUrl} ${res.statusCode} ${ms}ms`);
+  };
+  res.on('finish', log); // response fully handed off
+  res.on('close', log);  // client hung up early
+  next();
+});
+
 app.use(express.static(path.join(process.cwd(), 'public')));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
