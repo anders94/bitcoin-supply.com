@@ -201,16 +201,26 @@ main .wrap { padding: 18px 18px 16px; display: flex; flex-direction: column; gap
 
 /* ---------- sliders (noUiSlider) ---------- */
 
-.slider { height: 22px; margin: 0; }
-.slider .noUi-base { height: 22px; }
-.slider .noUi-connects { height: 2px; top: 10px; background: var(--border); border-radius: 0; }
-.slider.noUi-target {
+/* Selectors are deliberately specific: nouislider's own stylesheet is bundled
+   into dist/home.css and loads after this file, so `.noUi-horizontal .noUi-*`
+   rules would otherwise win and render the default 34x28 oblong handle. */
+.slider.noUi-target,
+.slider.noUi-target.noUi-horizontal {
+  height: 22px;
+  margin: 0;
   background: transparent;
   border: none;
   box-shadow: none;
   border-radius: 0;
 }
-.slider .noUi-handle {
+.slider.noUi-target .noUi-base { height: 22px; }
+.slider.noUi-target .noUi-connects {
+  height: 2px;
+  top: 10px;
+  background: var(--border);
+  border-radius: 0;
+}
+.slider.noUi-target.noUi-horizontal .noUi-handle {
   width: 13px;
   height: 13px;
   right: -6.5px;
@@ -221,8 +231,9 @@ main .wrap { padding: 18px 18px 16px; display: flex; flex-direction: column; gap
   box-shadow: 0 0 0 1px var(--ink);
   cursor: pointer;
 }
-.slider .noUi-handle::before, .slider .noUi-handle::after { display: none; }
-.slider .noUi-connect { background: transparent; }
+.slider.noUi-target .noUi-handle::before,
+.slider.noUi-target .noUi-handle::after { display: none; }
+.slider.noUi-target .noUi-connect { background: transparent; }
 
 .stops {
   display: flex;
