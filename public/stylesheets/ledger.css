@@ -645,6 +645,10 @@ main .wrap { padding: 18px 18px 16px; display: flex; flex-direction: column; gap
   .hero-sub .figure { font-family: var(--mono); font-size: 18px; font-weight: 600; }
   .hero-sub .figure--red { color: var(--red); }
   .hero-sub .figure--purple { color: var(--purple); }
+  /* Same trick as .hero-num: shrink and mute the fraction so 8 decimals don't
+     crowd the hero. Lightened via opacity rather than --secondary so each
+     figure keeps its own red/purple identity. */
+  .hero-sub .figure .dec { font-size: 10px; font-weight: 500; opacity: .55; }
   .hero-aside {
     display: block;
     flex: 1;

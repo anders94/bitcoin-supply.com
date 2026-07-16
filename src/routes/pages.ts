@@ -167,6 +167,10 @@ router.get('/', async (req: Request, res: Response) => {
     const ssr = {
       eff: btcParts(effSats),
       oocBtc: btc8(provable.sats),
+      // The headline figures render the fraction in its own span so it can be
+      // set smaller and lighter — at full 8-decimal precision they otherwise
+      // crowd the hero's last column.
+      oocParts: btcParts(provable.sats),
       oocPct: allN > 0 ? (oocN / allN * 100).toFixed(3) + '%' : '0%',
       effW: (Number(effSats) / Number(CAP_SATS) * 100).toFixed(3),
       oocW: oocN > 0 ? Math.max(0.45, oocN / Number(CAP_SATS) * 100).toFixed(3) : '0',
@@ -179,6 +183,7 @@ router.get('/', async (req: Request, res: Response) => {
         // whole sats; round to a sat and show the full 8 decimals like every
         // other BTC figure on the site.
         captured: btc8(BigInt(Math.round(capN))),
+        capturedParts: btcParts(BigInt(Math.round(capN))),
         keys: Math.round(interp(keyTbl, capN)).toLocaleString('en-US'),
         minWorth: btc8(BigInt(Math.round(minwN))) + ' BTC',
         effAfter: btc8(BigInt(Math.round(Math.max(Number(effSats) - capN, 0)))),

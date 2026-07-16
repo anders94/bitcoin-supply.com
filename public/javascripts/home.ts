@@ -78,8 +78,11 @@ function init() {
       ? `provably + probably + dormant ≥${YEARS[y]}y`
       : STOP_LABELS[state.stop];
     $('hero-redline').textContent = `−${btc8(ooc)} out of circulation · ${stopLabel}`;
-    const subOoc = document.getElementById('hero-sub-ooc');
-    if (subOoc) subOoc.textContent = `−${btc8(ooc)}`;
+    const oocP = btcParts(ooc);
+    const subOocInt = document.getElementById('hero-sub-ooc-int');
+    const subOocDec = document.getElementById('hero-sub-ooc-dec');
+    if (subOocInt) subOocInt.textContent = `−${oocP.int}`;
+    if (subOocDec) subOocDec.textContent = '.' + oocP.dec;
 
     // quantum values (needed for bar + readouts)
     const cap = state.q / 1000 * QTOT;
@@ -130,8 +133,11 @@ function init() {
     $('q-keys').textContent = keys.toLocaleString('en-US');
     $('q-minworth').textContent = btc8(BigInt(Math.round(minw))) + ' BTC';
     $('q-effafter').textContent = btc8(BigInt(Math.round(Math.max(effN - cap, 0))));
-    const subQ = document.getElementById('hero-sub-q');
-    if (subQ) subQ.textContent = btc8(BigInt(Math.round(cap)));
+    const capP = btcParts(BigInt(Math.round(cap)));
+    const subQInt = document.getElementById('hero-sub-q-int');
+    const subQDec = document.getElementById('hero-sub-q-dec');
+    if (subQInt) subQInt.textContent = capP.int;
+    if (subQDec) subQDec.textContent = '.' + capP.dec;
   }
 
   function makeSlider(id: string, start: number, max: number, step: number, onUpdate: (v: number) => void) {

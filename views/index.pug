@@ -14,10 +14,14 @@ block content
       .redline.mobile-only#hero-redline −#{ssr.oocBtc} out of circulation · provably lost
     .hero-sub
       span.label.label--red OUT OF CIRCULATION
-      span.figure.figure--red#hero-sub-ooc −#{ssr.oocBtc}
+      span.figure.figure--red
+        span.int#hero-sub-ooc-int −#{ssr.oocParts.int}
+        span.dec#hero-sub-ooc-dec .#{ssr.oocParts.dec}
     .hero-sub
       span.label.label--purple Q-CAPTURED
-      span.figure.figure--purple#hero-sub-q= ssr.q.captured
+      span.figure.figure--purple
+        span.int#hero-sub-q-int= ssr.q.capturedParts.int
+        span.dec#hero-sub-q-dec .#{ssr.q.capturedParts.dec}
     .hero-aside
       | +#{btc8(supply.miner_never_claimed_sats)} BTC expected,
       br
