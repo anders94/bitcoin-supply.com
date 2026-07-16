@@ -58,6 +58,7 @@ router.use(async (req: Request, res: Response, next) => {
   } catch {
     res.locals.tip = { height: 0, timestamp: new Date(0).toISOString() };
   }
+  res.locals.tip.lag = config.etl.confirmationLag;
   next();
 });
 

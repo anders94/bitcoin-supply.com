@@ -95,12 +95,46 @@ a:hover { color: var(--body); }
   color: var(--secondary);
   letter-spacing: 0;
   white-space: nowrap;
+  position: relative;
+  cursor: help;
 }
+.tip:focus { outline: none; }
 .tip-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--green);
+}
+.tip-tooltip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 12px);
+  right: -6px;
+  width: 250px;
+  max-width: calc(100vw - 36px);
+  padding: 9px 11px 10px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  font-family: var(--sans);
+  font-size: 11px;
+  line-height: 1.55;
+  letter-spacing: 0;
+  color: var(--body);
+  white-space: normal;
+  text-align: left;
+  z-index: 60;
+}
+.tip:hover .tip-tooltip,
+.tip:focus .tip-tooltip,
+.tip.tip--open .tip-tooltip { display: block; }
+.tip-tooltip-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  color: var(--ink);
+  margin-bottom: 5px;
 }
 
 /* ---------- page + footer ---------- */

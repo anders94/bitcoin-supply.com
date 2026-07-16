@@ -38,9 +38,15 @@ html(lang='en')
             a(href='/proposals') PROPOSALS
           form.header-search(action='/search', method='POST')
             input(type='search', name='query', placeholder='block · txid · address ⏎', autocomplete='off')
-          #tip.tip(data-tip-height=tip.height, data-tip-ts=tip.timestamp)
+          #tip.tip(data-tip-height=tip.height, data-tip-ts=tip.timestamp, tabindex='0', aria-describedby='tip-tooltip')
             span.tip-dot
             span#tip-text #{num(tip.height)}
+            #tip-tooltip.tip-tooltip(role='tooltip')
+              span.tip-tooltip-label LATEST INDEXED BLOCK
+              | The newest block in this ledger, and how long since it was
+              | mined. Indexing deliberately runs #{tip.lag} confirmations
+              | behind the network tip, so a brief chain reorganization
+              | can’t corrupt the running totals.
     main
       .wrap
         block content

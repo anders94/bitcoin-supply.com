@@ -17,6 +17,19 @@ if (tipEl && textEl) {
   renderTip();
   setInterval(renderTip, 10_000);
 
+  // Hover/focus shows the explainer via CSS; a tap toggles it on touch
+  // devices (iOS Safari doesn't focus a tabindex div on tap).
+  tipEl.addEventListener('click', () => tipEl.classList.toggle('tip--open'));
+  document.addEventListener('pointerdown', (e) => {
+    if (!tipEl.contains(e.target as Node)) tipEl.classList.remove('tip--open');
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      tipEl.classList.remove('tip--open');
+      if (document.activeElement === tipEl) tipEl.blur();
+    }
+  });
+
   const es = new EventSource('/api/v1/events');
   es.onmessage = (e) => {
     try {
