@@ -1,0 +1,47 @@
+extends layout
+
+block content
+  .page-head
+    span.label THE UTXO SET
+    span.big #{num(utxoCount)} unspent outputs
+    span.desc Where the coin sits, by age and size — the raw material behind both sliders.
+
+  section(style='display:flex;flex-direction:column;gap:6px')
+    .section-head
+      span.label AGE × VALUE · #[span#matrix-unit BTC HELD]
+      div(style='display:flex;gap:5px')
+        span.chip-btn.active#unit-btc(data-unit='btc') BTC HELD
+        span.chip-btn#unit-count(data-unit='count') UTXO COUNT
+    .matrix#matrix
+      span
+      each col in ['< 1y', '1–5y', '5–10y', '≥ 10y']
+        span.col-h= col
+      each row, ri in cells.btc
+        span.row-h= ['≥ 100', '1–100', '0.01–1', '< 0.01'][ri]
+        each c in row
+          span.cell(style=`background:${c.bg};color:${c.fg}`)= c.v
+    .note.note--tiny ROWS = OUTPUT VALUE (BTC) · COLUMNS = TIME SINCE LAST MOVE. THE ≥10Y COLUMN IS THE DORMANCY SLIDER'S TAIL.
+
+  section.section.section--tight
+    .section-head
+      span.label OUT OF CIRCULATION OVER TIME · PROVABLE
+      span(style='font-family:var(--mono);font-size:9px;color:var(--secondary)')= barRange
+    .bars
+      each b in bars
+        span(style=`height:${b.heightPct}%`, title=`${b.year}`)
+    .note.note--tiny CUMULATIVE PROVABLY-LOST BTC AT EACH YEAR END.
+
+  section.section.section--tight
+    span.label LARGEST DORMANT OUTPUTS
+    .rows(style='font-size:10px')
+      each g in giants
+        .event-row
+          a.txid(href=`/address/${g.address}`)= shortAddress(g.address)
+          span.chip(class=g.chip === 'HASHED' ? 'chip--gray' : 'chip--purple')= g.chip
+          span.amt(style='font-weight:600')= btc2(g.balance)
+          span.yr ≥ #{g.age_years}y
+
+block scripts
+  script.
+    window.__UTXOS__ = !{cellsJson};
+  script(src='/javascripts/dist/utxos.js', defer)

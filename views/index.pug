@@ -1,147 +1,174 @@
 extends layout
 
+block styles
+  link(rel='stylesheet', href='/javascripts/dist/home.css')
+
 block content
-  .container
+  //- hero
+  .desktop-hero
+    .hero-figures
+      span.label EFFECTIVE SUPPLY · BTC
+      .hero-num
+        span.int#hero-int= ssr.eff.int
+        span.dec#hero-dec .#{ssr.eff.dec}
+      .redline.mobile-only#hero-redline −#{ssr.oocBtc} out of circulation · provably lost
+    .hero-sub
+      span.label.label--red OUT OF CIRCULATION
+      span.figure.figure--red#hero-sub-ooc −#{ssr.oocBtc}
+    .hero-sub
+      span.label.label--purple Q-CAPTURED
+      span.figure.figure--purple#hero-sub-q= ssr.q.captured
+    .hero-aside
+      | +#{btc8(supply.miner_never_claimed_sats)} BTC expected,
+      br
+      | never claimed by miners
 
-    //- Hero Section
-    .hero.mb-4
-      .row.align-items-center
-        .col-md-7
-          .hero-subtitle OUT OF CIRCULATION ESTIMATE
-          .hero-title#hero-btc-display
-            | — BTC
-          .hero-subtitle#hero-label out of circulation (loading...)
-          .hero-subtitle.text-muted#hero-context
-          .mt-3.text-muted
-            small block&nbsp;
-              span#hero-block= latestBlock ? latestBlock.block_number : '—'
-              |  &middot;&nbsp;
-              span#hero-time loading...
-              |  &nbsp;
-              span.text-success#sse-dot ●
-        .col-md-5.d-none.d-md-block
-          .chart-container
-            canvas#supply-chart
+  //- supply bar
+  div(style='display:flex;flex-direction:column;gap:5px')
+    .bar
+      .bar__eff#bar-eff(style=`width:${ssr.effW}%`)
+        .bar__hatch#bar-hatch(style=`width:${ssr.qW}%`)
+      .bar__ooc#bar-ooc(style=`width:${ssr.oocW}%`)
+      .bar__stripe
+    .legend
+      span
+        i.sw-eff
+        | EFFECTIVE
+      span
+        i.sw-ooc
+        | OUT OF CIRC
+      span
+        i.sw-stripe
+        | UNISSUED
+      span
+        i.sw-hatch
+        | Q-CAPTURED
+    .note.mobile-only +#{btc8(supply.miner_never_claimed_sats)} BTC expected but never claimed by miners — excluded from issued supply.
 
-    //- Main Spectrum Slider
-    .card.mb-4
-      .card-header
-        span OUT OF CIRCULATION SPECTRUM
-      .card-body
-        //- 5-stop labels
-        .d-flex.justify-content-between.mb-2.spectrum-labels
-          span.text-muted(title='All UTXOs counted as out-of-circulation') Everything
-          span.text-secondary Dormant
-          span.text-secondary Probably Lost
-          span.text-warning Provably Lost
-          span.text-muted Nothing
+  .home-grid
+    .col
+      //- spectrum
+      section.section.panel
+        .section-head
+          span.label WHAT COUNTS AS OUT OF CIRCULATION?
+          span.section-value.section-value--red#spectrum-ooc −#{ssr.oocBtc}
+        #spectrum-slider.slider
+        .stops#spectrum-stops
+          span(data-stop='0') NOTHING
+          span.active(data-stop='1') PROVABLE
+          span(data-stop='2') PROBABLE
+          span(data-stop='3') DORMANT
+          span(data-stop='4') EVERYTHING
+        .inset#dormancy-panel(hidden)
+          span.label.label--sub#dormancy-label DORMANCY THRESHOLD · ≥ 10Y
+          #dormancy-slider.slider
+          .stops.stops--year#dormancy-stops
+            span(data-year='0') 1y
+            span(data-year='1') 3y
+            span(data-year='2') 5y
+            span(data-year='3') 7y
+            span.active(data-year='4') 10y
+            span(data-year='5') 15y
+            span(data-year='6') 20y
+        .desc.desc--min#stop-desc Mathematically certain only: outputs spent to unspendable conditions. The default view.
+        .rows#breakdown
+          .row.row--head(data-group='provable')
+            span PROVABLE
+            span RULES 000–011
+          each g in supply.breakdown.provable
+            .row(data-group='provable')
+              span= g.label
+              span= btc8(g.sats)
+          .row.row--head.dim(data-group='probable')
+            span PROBABLE
+            span RULES 012–013
+          each g in supply.breakdown.probable
+            .row.dim(data-group='probable')
+              span= g.label
+              span= btc8(g.sats)
+          .row.row--head.dim(data-group='dormant')
+            span DORMANT
+            span RULE 014
+          .row.dim(data-group='dormant')
+            span#dormant-row-label Untouched ≥ 10y · incl. Satoshi-era
+            span#dormant-row-value= ssr.dormantValue
+          .row.dim(data-group='active', style='padding-bottom:6px')
+            span#active-row-label Active UTXOs (moved &lt; 10y)
+            span#active-row-value= ssr.activeValue
+          .row.row--total
+            span OUT OF CIRCULATION
+            span#ooc-total #{ssr.oocBtc} · #{ssr.oocPct}
 
-        //- noUiSlider target
-        #spectrum-slider.mb-4
+      //- top losses (below the fold on mobile)
+      section.section.panel.section--tight
+        span.label TOP LOSSES · ALL TIME
+        .rows(style='font-size:10px')
+          each e in topLosses
+            .event-row
+              span.rank= e.rank
+              if e.href
+                a.lbl(href=e.href)= e.label
+              else
+                span.lbl= e.label
+              span.chip(class=ruleCategory(e.rule) === 'probable' ? 'chip--amber' : 'chip--red')= e.rule
+              span.amt.amt--red −#{btc8(e.total_sats)}
+              span.yr= e.year_label
+        a.more-link(href='/losses') FULL LOSS HISTORY →
 
-        //- Dormancy sub-slider (hidden unless "Dormant" selected)
-        #dormancy-section.mb-4(style='display:none')
-          .d-flex.justify-content-between.mb-2
-            small.text-muted 1 year dormant
-            small.text-secondary#dormancy-label 5 years
-            small.text-muted 20 years dormant
-          #dormancy-slider
+    .col
+      //- quantum
+      section.section.panel
+        .section-head
+          span.label QUANTUM ATTACK CAPTURE
+          span.section-value.section-value--purple
+            span#q-pct= ssr.q.pct
+            |  of exposed
+        .desc If a practical quantum computer existed, a rational attacker would break the largest exposed keys first. Sweep the capture.
+        #quantum-slider.slider
+        .rows
+          .row
+            span.k captured
+            span.v--purple
+              span#q-captured= ssr.q.captured
+              |  BTC
+          .row.row--dotted
+            span.k keys broken
+            span#q-keys= ssr.q.keys
+          .row.row--dotted
+            span.k smallest output worth breaking
+            span#q-minworth= ssr.q.minWorth
+          .row.row--dotted
+            span.k effective supply after attack
+            span#q-effafter= ssr.q.effAfter
+        .note P2PK #{btc2(supply.quantum.p2pk_sats)} · EXPOSED P2PKH #{btc2(supply.quantum.exposed_pkh_sats)} · TOTAL #{btc2(supply.quantum.total_sats)}
+        .note--italic A different cut through the same outputs — never added to the loss total. #[a(href='/quantum', style='color:var(--secondary)') Full quantum explorer →]
 
-        //- Display area
-        .row.mt-4
-          .col-md-6
-            .metric-card
-              .metric-value#spectrum-sats —
-              .metric-label#spectrum-desc loading...
-          .col-md-3
-            .metric-card
-              .metric-value#spectrum-utxos —
-              .metric-label unspent outputs
-          .col-md-3
-            .metric-card
-              .metric-value#spectrum-effective —
-              .metric-label Effective Supply
+      //- recent losses
+      section.section.panel.section--tight
+        span.label RECENT PROVABLE LOSSES
+        .rows(style='font-size:9.5px')
+          each l in recentLosses
+            .event-row
+              a.txid(href=`/transaction/${l.tx_hash}`)= shortHash(l.tx_hash)
+              span.chip.chip--red= ruleChip(l.loss_rules[0])
+              span.amt −#{btc8(l.value_sats)}
+              span.blk= num(l.block_number)
 
-        //- Loss breakdown bar
-        .mt-4#loss-breakdown-bar
-          .d-flex.justify-content-between.mb-1
-            small.text-muted Loss breakdown by proposal
-            small.text-muted#breakdown-total
-          .progress(style='height:8px')
-            #breakdown-fill.progress-bar(style='width:0%')
-
-    //- Quantum Section
-    .card.mb-4
-      .card-header
-        span.text-warning ⚡ QUANTUM SCENARIO
-      #quantum-section
-        .card-body
-          p.text-secondary
-            | A sufficiently powerful quantum computer could derive a private key from an exposed public key.
-            | Not all Bitcoin is at risk — only outputs whose public key is already visible on-chain (P2PK outputs and addresses that have spent at least once).
-            | The slider shows cumulative exposure, targeting the largest vulnerable outputs first (an attacker's optimal strategy).
-
-          .mb-4
-            .d-flex.justify-content-between.mb-2
-              small.text-muted 0 BTC stolen
-              small.text-secondary#quantum-label
-              small.text-muted#quantum-max-label all exposed BTC
-            #quantum-slider
-
-          .row.mt-4
-            .col-md-4
-              .metric-card
-                .metric-value#quantum-sats 0
-                .metric-label BTC at risk
-            .col-md-4
-              .metric-card
-                .metric-value#quantum-keys —
-                .metric-label keys to break
-            .col-md-4
-              .metric-card
-                .metric-value#quantum-effective —
-                .metric-label effective supply after attack
-
-    //- Recent Provably Lost UTXOs
-    .card.mb-4
-      .card-header Recent Provably Lost UTXOs
-      .card-body.p-0
-        .table-responsive
-          table.table.table-sm.tx-table.mb-0
-            thead
-              tr
-                th Block
-                th Value
-                th Rules
-                th Address
-            tbody
-              each u in recent_losses
-                tr
-                  td
-                    a(href=`/block/${u.block_number}`)= u.block_number
-                  td.btc-amount.text-warning= formatBtc(BigInt(u.value_sats))
-                  td
-                    each rule in u.loss_rules
-                      span.badge.bg-danger.me-1= rule
-                  td
-                    if u.address
-                      a.text-truncate.d-inline-block(href=`/address/${u.address}`, style='max-width:120px')= u.address
-                    else
-                      span.text-muted —
+      //- halvings
+      section.section.panel.section--tight
+        span.label REWARD HALVINGS
+        .rows(style='font-size:10px')
+          each h in halvings
+            .event-row(style=h.estimated ? 'color:var(--secondary)' : '')
+              span(style='width:56px;color:var(--secondary)')= num(h.height)
+              if h.estimated
+                span(style='flex:1;font-style:italic') ~#{h.timestamp ? dateUtc(h.timestamp) : '—'} (est.)
+              else
+                span(style='flex:1')= h.timestamp ? dateTimeUtc(h.timestamp) : '—'
+              span #{h.from_subsidy} → #{h.to_subsidy}
+        span.note.note--tiny#freshness DATA #{dateTimeUtc(freshness)} · TIP #{num(supply.tip.height)}
 
 block scripts
-  script(src='/javascripts/dist/slider.js')
-  script(src='/javascripts/dist/charts.js')
   script.
-    // Pass server-side data to frontend
-    window.SUPPLY_DATA = {
-      provably_lost_sats: '!{provably_lost_sats}',
-      provably_lost_count: '!{provably_lost_count}',
-      probably_lost_sats: '!{probably_lost_sats}',
-      probably_lost_count: '!{probably_lost_count}',
-      all_utxos_sats: '!{all_utxos_sats}',
-      all_utxos_count: '!{all_utxos_count}',
-      quantum_total_sats: '!{quantum_total_sats}',
-      dormancy_curve: !{dormancy_curve},
-      current_block: #{latestBlock ? latestBlock.block_number : 0},
-    };
+    window.__SUPPLY__ = !{supplyJson};
+  script(src='/javascripts/dist/home.js', defer)

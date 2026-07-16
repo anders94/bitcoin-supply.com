@@ -1,9 +1,8 @@
 extends layout
 
 block content
-  .container
-    .error-container
-      .error-code= code || 500
-      .error-message= message || 'An error occurred'
-      .mt-4
-        a.btn.btn-outline-warning(href='/') &larr; Back to Home
+  .error-box
+    span.label ERROR
+    span.code.mono= code || 500
+    span.desc= message || 'An error occurred'
+    a.ext-link(href='/') ← BACK TO THE LEDGER

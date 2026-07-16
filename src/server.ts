@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { connectRedis } from './services/redis.js';
+import { initSSESubscriber } from './services/sse.js';
 import apiRoutes from './routes/api.js';
 import pageRoutes from './routes/pages.js';
 import { config } from './config.js';
@@ -20,6 +21,7 @@ app.use('/', pageRoutes);
 
 async function start() {
   await connectRedis();
+  await initSSESubscriber();
   app.listen(config.server.port, () => {
     console.log(`Server running on port ${config.server.port}`);
   });

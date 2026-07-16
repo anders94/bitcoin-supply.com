@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../db/index.js';
+import { getComputedStats } from '../db/computed-stats.js';
 import { withCache } from '../services/redis.js';
 import { addSSEClient } from '../services/sse.js';
 import { config } from '../config.js';
@@ -63,8 +64,10 @@ router.get('/loss-spectrum', async (req: Request, res: Response) => {
 
       if (maxBucket === 3 && dormantBefore) {
         params.push(dormantBefore);
+        // Dormancy includes quantum-tagged P2PK (bucket 4): the quantum tag is
+        // an independent lens, not a loss bucket on this axis.
         whereClause = `WHERE (loss_bucket BETWEEN 1 AND 2)
-          OR (loss_bucket = 0 AND block_timestamp <= $1)`;
+          OR (loss_bucket IN (0, 4) AND block_timestamp <= $1)`;
       } else if (maxBucket >= 1) {
         whereClause = `WHERE loss_bucket BETWEEN 1 AND ${maxBucket}`;
       }
@@ -155,16 +158,20 @@ router.get('/dormancy-curve', async (req: Request, res: Response) => {
 router.get('/loss-breakdown', async (req: Request, res: Response) => {
   try {
     const data = await withCache('api:loss-breakdown', 300, async () => {
-      const { rows } = await pool.query(`
-        SELECT unnest(loss_rules) rule, SUM(value_sats) total_sats, COUNT(*) utxo_count
-        FROM utxos WHERE loss_bucket > 0
-        GROUP BY 1 ORDER BY total_sats DESC
-      `);
-      return rows.map(r => ({
+      // Precomputed hourly by the ETL snapshot job (a live unnest over tens of
+      // millions of loss rows is far too slow for request time).
+      const stats = await getComputedStats(['rule_breakdown']);
+      const rules: any[] = stats['rule_breakdown']?.data?.rules ?? [];
+      const miner = stats['rule_breakdown']?.data?.miner_loss;
+      const out = rules.map(r => ({
         rule: r.rule,
         total_sats: r.total_sats.toString(),
         utxo_count: r.utxo_count.toString(),
       }));
+      if (miner && miner.total_sats !== '0') {
+        out.push({ rule: '002', total_sats: miner.total_sats, utxo_count: miner.block_count });
+      }
+      return out.sort((a, b) => (BigInt(b.total_sats) > BigInt(a.total_sats) ? 1 : -1));
     });
     res.json(data);
   } catch (err) {
@@ -238,75 +245,20 @@ router.get('/quantum', async (req: Request, res: Response) => {
 router.get('/quantum-curve', async (req: Request, res: Response) => {
   try {
     const data = await withCache('api:quantum-curve', 600, async () => {
-      // Single CTE computes the window function once and aggregates all thresholds in one pass.
-      // Previously this ran 7 separate queries each doing a full window-function scan.
-      const { rows } = await pool.query(`
-        WITH ranked AS (
-          SELECT address, value_sats,
-                 SUM(value_sats) OVER (ORDER BY value_sats DESC) AS cumulative
-          FROM utxos WHERE pubkey_exposed = TRUE
-        )
-        SELECT
-          COUNT(*) FILTER (WHERE cumulative <= 1000000000)                      AS utxo_count_t0,
-          SUM(value_sats) FILTER (WHERE cumulative <= 1000000000)               AS total_sats_t0,
-          COUNT(DISTINCT address) FILTER (WHERE cumulative <= 1000000000)       AS addr_count_t0,
-          MIN(value_sats) FILTER (WHERE cumulative <= 1000000000)               AS min_sats_t0,
-          COUNT(*) FILTER (WHERE cumulative <= 10000000000)                     AS utxo_count_t1,
-          SUM(value_sats) FILTER (WHERE cumulative <= 10000000000)              AS total_sats_t1,
-          COUNT(DISTINCT address) FILTER (WHERE cumulative <= 10000000000)      AS addr_count_t1,
-          MIN(value_sats) FILTER (WHERE cumulative <= 10000000000)              AS min_sats_t1,
-          COUNT(*) FILTER (WHERE cumulative <= 100000000000)                    AS utxo_count_t2,
-          SUM(value_sats) FILTER (WHERE cumulative <= 100000000000)             AS total_sats_t2,
-          COUNT(DISTINCT address) FILTER (WHERE cumulative <= 100000000000)     AS addr_count_t2,
-          MIN(value_sats) FILTER (WHERE cumulative <= 100000000000)             AS min_sats_t2,
-          COUNT(*) FILTER (WHERE cumulative <= 1000000000000)                   AS utxo_count_t3,
-          SUM(value_sats) FILTER (WHERE cumulative <= 1000000000000)            AS total_sats_t3,
-          COUNT(DISTINCT address) FILTER (WHERE cumulative <= 1000000000000)    AS addr_count_t3,
-          MIN(value_sats) FILTER (WHERE cumulative <= 1000000000000)            AS min_sats_t3,
-          COUNT(*) FILTER (WHERE cumulative <= 10000000000000)                  AS utxo_count_t4,
-          SUM(value_sats) FILTER (WHERE cumulative <= 10000000000000)           AS total_sats_t4,
-          COUNT(DISTINCT address) FILTER (WHERE cumulative <= 10000000000000)   AS addr_count_t4,
-          MIN(value_sats) FILTER (WHERE cumulative <= 10000000000000)           AS min_sats_t4,
-          COUNT(*) FILTER (WHERE cumulative <= 100000000000000)                 AS utxo_count_t5,
-          SUM(value_sats) FILTER (WHERE cumulative <= 100000000000000)          AS total_sats_t5,
-          COUNT(DISTINCT address) FILTER (WHERE cumulative <= 100000000000000)  AS addr_count_t5,
-          MIN(value_sats) FILTER (WHERE cumulative <= 100000000000000)          AS min_sats_t5,
-          COUNT(*)                                                               AS utxo_count_max,
-          COALESCE(SUM(value_sats), 0)                                          AS total_sats_max,
-          COUNT(DISTINCT address)                                                AS addr_count_max,
-          MIN(value_sats)                                                        AS min_sats_max
-        FROM ranked
-      `);
-
-      const r = rows[0];
-      const thresholdDefs = [
-        { suffix: 't0', threshold: '1000000000' },
-        { suffix: 't1', threshold: '10000000000' },
-        { suffix: 't2', threshold: '100000000000' },
-        { suffix: 't3', threshold: '1000000000000' },
-        { suffix: 't4', threshold: '10000000000000' },
-        { suffix: 't5', threshold: '100000000000000' },
-      ];
-
-      const breakpoints = thresholdDefs
-        .filter(({ suffix }) => parseInt(r[`utxo_count_${suffix}`]) > 0)
-        .map(({ suffix, threshold }) => ({
-          threshold_sats: threshold,
-          utxo_count: r[`utxo_count_${suffix}`].toString(),
-          total_sats: (r[`total_sats_${suffix}`] ?? '0').toString(),
-          address_count: r[`addr_count_${suffix}`].toString(),
-          min_value_sats: (r[`min_sats_${suffix}`] ?? '0').toString(),
-        }));
-
-      breakpoints.push({
-        threshold_sats: (r.total_sats_max ?? '0').toString(),
-        utxo_count: r.utxo_count_max.toString(),
-        total_sats: (r.total_sats_max ?? '0').toString(),
-        address_count: r.addr_count_max.toString(),
-        min_value_sats: (r.min_sats_max ?? '0').toString(),
-      });
-
-      return { breakpoints };
+      // Precomputed hourly by the ETL snapshot job (the window-function scan
+      // over all exposed outputs is far too slow for request time). Response
+      // keeps the original shape; more breakpoints than before.
+      const stats = await getComputedStats(['quantum_curve']);
+      const bps: any[] = stats['quantum_curve']?.data?.breakpoints ?? [];
+      return {
+        breakpoints: bps.map(bp => ({
+          threshold_sats: bp.cum_sats,
+          utxo_count: bp.utxo_count,
+          total_sats: bp.cum_sats,
+          address_count: bp.key_count,
+          min_value_sats: bp.min_value_sats,
+        })),
+      };
     });
     res.json(data);
   } catch (err) {

@@ -1,24 +1,31 @@
 extends layout
 
 block content
-  .container
+  div(style='display:flex;flex-direction:column;gap:4px')
+    a.back-link(href='/proposals') ← ALL PROPOSALS
+    span.label PROPOSAL #{id}
+    span.page-title= heading
+    div(style='display:flex;gap:6px')
+      if category
+        span.chip(class=chipClass, style='padding:1px 5px')= category
+      span.chip.chip--gray(style='padding:1px 5px')= status
 
-    a.btn.btn-outline-secondary.mb-4(href='/proposals') &larr; All Proposals
+  if metaRows.length
+    .rows(style='font-size:10px')
+      each m, i in metaRows
+        .row.row--dotted(style=i === metaRows.length - 1 ? 'border-bottom:1px dotted var(--dotted);padding:4px 0' : 'padding:4px 0')
+          span.k= m.label
+          span= m.value
 
-    .card
-      .card-body.proposal-content
-        != content
+  .proposal-body
+    != content
 
-block scripts
-  style.
-    .proposal-content h1 { font-size: 1.75rem; color: var(--btc-orange); margin-bottom: 1rem; }
-    .proposal-content h2 { font-size: 1.25rem; color: var(--text-primary); margin-top: 1.5rem; }
-    .proposal-content table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
-    .proposal-content table th, .proposal-content table td {
-      border: 1px solid var(--border); padding: 0.5rem 1rem;
-    }
-    .proposal-content table th { background: var(--bg-tertiary); }
-    .proposal-content code { background: var(--bg-tertiary); padding: 0.1rem 0.3rem; border-radius: 4px; color: var(--btc-orange); font-family: var(--font-mono); }
-    .proposal-content pre { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; overflow-x: auto; }
-    .proposal-content pre code { background: none; padding: 0; }
-    .proposal-content p { color: var(--text-secondary); }
+  .pager
+    if prev
+      a(href=`/proposals/${prev.id}`) ← #{prev.id} #{prev.title.toUpperCase().slice(0, 24)}
+    else
+      span.disabled ← —
+    if next
+      a(href=`/proposals/${next.id}`) #{next.id} #{next.title.toUpperCase().slice(0, 24)} →
+    else
+      span.disabled — →

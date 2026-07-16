@@ -1,79 +1,66 @@
 extends layout
 
 block content
-  .container
+  .block-pager
+    .side
+      if pager.prev !== null
+        a.jump(href=`/block/${pager.prev}`) ← #{num(pager.prev)}
+        span.sub #{num(pager.prevSkipped)} loss-free skipped
+      else
+        span.jump.disabled ← —
+        span.sub start of history
+    .side.side--right
+      if pager.next !== null
+        a.jump(href=`/block/${pager.next}`) #{num(pager.next)} →
+        span.sub #{num(pager.nextSkipped)} loss-free skipped
+      else
+        span.jump.disabled tip →
+        span.sub no newer loss
 
-    .block-nav
-      if prevBlock !== null
-        a.btn.btn-outline-secondary(href=`/block/${prevBlock}`) &larr; Block #{prevBlock}
-      a.btn.btn-outline-secondary(href='/') Home
-      if nextBlock !== null
-        a.btn.btn-outline-secondary(href=`/block/${nextBlock}`) Block #{nextBlock} &rarr;
+  .block-card
+    span.label BLOCK
+    span.n= num(blockNum)
+    span.meta #{dateTimeUtc(block.block_timestamp)} · #{num(block.tx_count)} TXS
+    .removed
+      span.label REMOVED IN THIS BLOCK
+      span.amt −#{btc8(removedTotal)}
 
-    .block-header(class=hasMinerLoss ? 'has-loss' : 'no-loss')
-      .block-header-title Block ##{block.block_number}
-      .hash-display.mb-3= block.block_hash
-      .row
-        .col-md-3
-          .metric-card
-            .metric-value= new Date(block.block_timestamp).toLocaleDateString('en-US')
-            .metric-label Timestamp
-        .col-md-3
-          .metric-card
-            .metric-value= block.tx_count
-            .metric-label Transactions
-        .col-md-3
-          .metric-card
-            .metric-value.text-warning= formatBtc(BigInt(block.coinbase_value_sats))
-            .metric-label Coinbase Value (BTC)
-        .col-md-3
-          .metric-card
-            .metric-value(class=hasMinerLoss ? 'text-danger' : 'text-success')
-              = hasMinerLoss ? '-' + formatBtc(BigInt(minerLoss)) : '0.00'
-            .metric-label Miner Loss (BTC)
+  section.section.section--tight
+    .section-head
+      span.label MINER LOSS · RULE 002
+      span.section-value.section-value--red(style='font-size:11px') −#{btc8(minerLoss)}
+    .desc(style='font-size:10.5px') Supply and fees the miner was entitled to but never took — this coin was simply never created.
+    .rows(style='font-size:10px')
+      .row.row--dotted
+        span.k subsidy allowed
+        span= btc8(subsidy)
+      .row.row--dotted
+        span.k fees available
+        span= btc8(fees)
+      .row.row--dotted
+        span.k coinbase claimed
+        span= btc8(claimed)
+      if minerLoss !== '0'
+        .row.row--dotted(style='font-weight:600;color:var(--red)')
+          span underclaimed
+          span −#{btc8(minerLoss)}
+      else
+        .row.row--dotted.row--zero full entitlement claimed — no miner loss
 
-    //- Miner loss alert
-    if hasMinerLoss
-      .alert.alert-danger.mb-4
-        strong Miner Loss (Proposal 002):&nbsp;
-        | This miner left #{formatBtc(BigInt(minerLoss))} BTC unclaimed.
-        | Allowed supply was #{formatBtc(BigInt(block.allowed_supply_sats))} BTC but only #{formatBtc(BigInt(block.coinbase_value_sats))} BTC was taken.
+  section.section.section--tight
+    .section-head
+      span.label TRANSACTIONAL LOSS
+      span.section-value.section-value--red(style='font-size:11px') −#{btc8(txLoss)}
+    .desc(style='font-size:10.5px') Existing coin spent to conditions that make it unspendable — OP_RETURN, invalid scripts, burns.
+    .rows(style='font-size:10px')
+      if lossUtxos.length
+        each u in lossUtxos
+          .event-row
+            a.txid(href=`/transaction/${u.tx_hash}`)= shortHash(u.tx_hash)
+            span.yr vout #{u.output_index}
+            span.chip(class=ruleCategory(u.loss_rules[0]) === 'probable' ? 'chip--amber' : 'chip--red')= ruleChip(u.loss_rules[0])
+            span.amt.amt--red −#{btc8(u.value_sats)}
+      else
+        .row.row--dotted.row--zero no transactional loss in this block
 
-    //- Loss UTXOs in this block
-    if lossUtxos.length > 0
-      .card
-        .card-header
-          | Loss UTXOs in Block #{block.block_number}
-          span.badge.bg-danger.ms-2= lossUtxos.length
-        .card-body.p-0
-          .table-responsive
-            table.table.tx-table.mb-0
-              thead
-                tr
-                  th Txid
-                  th Output
-                  th Value (BTC)
-                  th Rules
-                  th Bucket
-                  th Address
-              tbody
-                each u in lossUtxos
-                  tr(class=u.loss_bucket === 1 ? 'table-danger' : '')
-                    td
-                      a.hash-short(href=`/transaction/${u.tx_hash}`)= u.tx_hash.slice(0, 16) + '...'
-                    td= u.output_index
-                    td.btc-amount.text-warning= formatBtc(BigInt(u.value_sats))
-                    td
-                      each rule in u.loss_rules
-                        a.badge.bg-danger.me-1.text-decoration-none(href=`/proposals/${rule}`)= rule
-                    td
-                      span.badge(class=u.loss_bucket === 1 ? 'bg-danger' : 'bg-warning text-dark')
-                        = u.loss_bucket === 1 ? 'Provably Lost' : 'Probably Lost'
-                    td
-                      if u.address
-                        a(href=`/address/${u.address}`)
-                          span.hash-short= u.address
-                      else
-                        span.text-muted —
-    else
-      .alert.alert-success No loss UTXOs in this block.
+  .tagline A loss explorer, not a block explorer — only blocks that remove coin are stops.

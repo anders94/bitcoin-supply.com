@@ -10,6 +10,8 @@ const MIGRATIONS = [
   '001-seed-data.sql',
   '002-add-indexes.sql',
   '003-address-info-exposure.sql',
+  '004-redesign-stats.sql',
+  '005-losses-order-index.sql',
 ];
 
 async function run() {

@@ -1,28 +1,22 @@
 extends layout
 
 block content
-  .container
+  .page-head
+    span.label PROPOSALS
+    span.big #{proposals.length} classification rules
+    span.desc Every figure on this site traces to a rule. Additions and changes happen by pull request; finalized proposals become detectors.
 
-    h2.mb-2 Loss Proposals
-    p.text-secondary.mb-4
-      | Each proposal defines a category of Bitcoin outputs considered out-of-circulation.
-      | The main slider lets you include or exclude categories based on your belief.
+  .rows
+    each p in proposals
+      .loss-item
+        .line1(style='align-items:baseline')
+          span(style='color:var(--faded)')= p.id
+          a.hash-link(href=`/proposals/${p.id}`, style='flex:1')= p.title
+          span(style='font-size:9.5px;color:var(--secondary)')= p.scale
+        div(style='display:flex;gap:6px;padding-left:26px')
+          span.chip(class=p.chipClass)= p.category
+          span.chip.chip--gray= p.status
 
-    .row
-      each p in proposals
-        .col-md-6.col-lg-4.mb-4
-          .card.h-100
-            .card-body
-              .d-flex.justify-content-between.align-items-start.mb-2
-                h5.mb-0
-                  a(href=`/proposals/${p.id}`)= p.title
-                span.badge(
-                  class=p.category === 'Provably Lost' ? 'bg-danger' : p.category.includes('Quantum') ? 'bg-info' : 'bg-warning text-dark'
-                )= p.id.split('-')[0]
-              .mb-2
-                span.badge(
-                  class=p.status === 'Final' ? 'bg-success' : 'bg-secondary'
-                )= p.status
-                span.badge.bg-secondary.ms-1= p.category
-              if p.scale && p.scale !== 'TBD'
-                .text-warning.text-mono.small= p.scale
+  .pager(style='justify-content:flex-start;gap:6px')
+    span(style='color:var(--faded);border:none') SUBMIT A PROPOSAL →
+    a(href='https://github.com/anders94/bitcoin-supply.com-2', style='color:var(--secondary);border-bottom:1px solid var(--border)') github.com/anders94/bitcoin-supply.com-2
