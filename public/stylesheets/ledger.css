@@ -249,6 +249,18 @@ main .wrap { padding: 18px 18px 16px; display: flex; flex-direction: column; gap
 .stops span.active { color: var(--ink); }
 .stops--year { font-size: 9px; letter-spacing: 0; }
 
+/* Static scale annotation under a continuous slider (not clickable detents). */
+.slider-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: .05em;
+  color: var(--faded);
+}
+.slider-scale span:nth-child(2) { color: var(--detent-off); }
+
 .inset {
   background: var(--inset);
   border: 1px solid var(--border);
