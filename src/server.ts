@@ -12,6 +12,10 @@ const app = express();
 app.set('view engine', 'pug');
 app.set('views', path.join(process.cwd(), 'views'));
 
+// We sit behind nginx, so req.ip should come from X-Forwarded-For — but only
+// when the hop is trusted, or any client could forge its own address.
+app.set('trust proxy', config.server.trustProxy);
+
 // Fallback social-preview metadata so layout.pug can always render, even for
 // views reached outside the pages router (which sets res.locals.meta per page).
 app.locals.meta = {
@@ -25,15 +29,24 @@ app.locals.meta = {
     'from full-chain analysis.',
 };
 
+// Client address for the log: req.ip resolves X-Forwarded-For per the trust
+// proxy setting above, falling back to the socket peer. Node reports IPv4 peers
+// on a dual-stack socket as ::ffff:1.2.3.4 — log the plain IPv4 form.
+function clientIp(req: express.Request): string {
+  const ip = req.ip || req.socket.remoteAddress || '-';
+  return ip.startsWith('::ffff:') ? ip.slice(7) : ip;
+}
+
 // One line per request. svlogd (-tt) prefixes the timestamp, so don't add one.
 app.use((req, res, next) => {
   const start = performance.now();
+  const ip = clientIp(req); // capture now; the socket is gone by 'close'
   let logged = false;
   const log = () => {
     if (logged) return; // 'finish' and 'close' can both fire
     logged = true;
     const ms = (performance.now() - start).toFixed(1);
-    console.log(`${req.method} ${req.originalUrl} ${res.statusCode} ${ms}ms`);
+    console.log(`${ip} ${req.method} ${req.originalUrl} ${res.statusCode} ${ms}ms`);
   };
   res.on('finish', log); // response fully handed off
   res.on('close', log);  // client hung up early

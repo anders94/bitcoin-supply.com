@@ -1,3 +1,13 @@
+// Express accepts a boolean, hop count, or subnet list for 'trust proxy';
+// env vars only carry strings, so coerce back to the intended type.
+function parseTrustProxy(v: string | undefined): boolean | number | string {
+  if (!v) return 'loopback';
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  if (/^\d+$/.test(v)) return parseInt(v);
+  return v;
+}
+
 export const config = {
   rpc: {
     host: process.env.RPCHOST || 'localhost',
@@ -26,6 +36,9 @@ export const config = {
     port: parseInt(process.env.PORT || '3000'),
     // Canonical origin for absolute URLs (Open Graph, canonical links).
     publicUrl: (process.env.PUBLIC_URL || 'https://bitcoin-supply.com').replace(/\/+$/, ''),
+    // Which hops may set X-Forwarded-For. Defaults to 'loopback' for nginx on
+    // the same host; set TRUST_PROXY to the proxy's IP/subnet if it isn't.
+    trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   },
   etl: {
     concurrency: parseInt(process.env.ETL_CONCURRENCY || '8'),
