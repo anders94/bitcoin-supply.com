@@ -39,12 +39,11 @@ export async function runLiveSync(): Promise<void> {
         await processBlock(block, knownBurnAddresses);
         await setLastSyncedBlock(height);
 
-        await publishSSE({
+        broadcastSSE({
           type: 'block',
           block_number: block.height,
           block_hash: hash,
           tx_count: block.tx.length,
-          block_timestamp: new Date(block.time * 1000).toISOString(),
         });
 
         console.log(`Live block ${block.height}: ${hash}`);

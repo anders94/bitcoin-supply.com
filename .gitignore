@@ -18,7 +18,12 @@ nohup.out
 # OS
 .DS_Store
 
-# runt
-run
+# runit
 log/
 supervise/
+run
+
+# misc
+*.txt
+*~
+.*~
