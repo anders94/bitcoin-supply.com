@@ -12,6 +12,19 @@ const app = express();
 app.set('view engine', 'pug');
 app.set('views', path.join(process.cwd(), 'views'));
 
+// Fallback social-preview metadata so layout.pug can always render, even for
+// views reached outside the pages router (which sets res.locals.meta per page).
+app.locals.meta = {
+  type: 'website',
+  url: config.server.publicUrl,
+  image: config.server.publicUrl + '/images/og-card.png',
+  imageAlt: 'bitcoin-supply — the effective Bitcoin supply explorer',
+  description:
+    'Tracking Bitcoin’s effective supply: how much of the 21M cap is provably lost, ' +
+    'probably lost, dormant, or exposed to a quantum attacker — measured UTXO by UTXO ' +
+    'from full-chain analysis.',
+};
+
 // One line per request. svlogd (-tt) prefixes the timestamp, so don't add one.
 app.use((req, res, next) => {
   const start = performance.now();

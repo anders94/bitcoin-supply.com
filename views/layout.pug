@@ -4,6 +4,8 @@ html(lang='en')
     meta(charset='UTF-8')
     meta(name='viewport', content='width=device-width, initial-scale=1.0')
     title= title + ' · bitcoin-supply'
+    //- Guard against a stale server build that doesn't populate meta.
+    - meta = (typeof meta === 'object' && meta) || {}
     meta(name='description', content=meta.description)
     link(rel='canonical', href=meta.url)
     meta(property='og:site_name', content='bitcoin-supply')
