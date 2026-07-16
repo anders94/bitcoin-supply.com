@@ -1,4 +1,5 @@
 extends layout
+include mixins
 
 block content
   .block-pager
@@ -56,7 +57,8 @@ block content
       if lossUtxos.length
         each u in lossUtxos
           .event-row
-            a.txid(href=`/transaction/${u.tx_hash}`)= shortHash(u.tx_hash)
+            a.txid(href=`/transaction/${u.tx_hash}`)
+              +ident(u.tx_hash, shortHash(u.tx_hash))
             span.yr vout #{u.output_index}
             span.chip(class=ruleCategory(u.loss_rules[0]) === 'probable' ? 'chip--amber' : 'chip--red')= ruleChip(u.loss_rules[0])
             span.amt.amt--red −#{btc8(u.value_sats)}

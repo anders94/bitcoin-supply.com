@@ -1,4 +1,5 @@
 extends layout
+include mixins
 
 block content
   .page-head
@@ -36,7 +37,9 @@ block content
     .rows(style='font-size:10px')
       each g in giants
         .event-row
-          a.txid(href=`/transaction/${g.tx_hash}`) #{shortHash(g.tx_hash)} : #{g.output_index}
+          a.txid(href=`/transaction/${g.tx_hash}`)
+            +ident(g.tx_hash, shortHash(g.tx_hash))
+            |  : #{g.output_index}
           span.chip(class=g.chip === 'HASHED' ? 'chip--gray' : 'chip--purple')= g.chip
           span.amt(style='font-weight:600')= btc8(g.value)
           span.yr ≥ #{g.age_years}y

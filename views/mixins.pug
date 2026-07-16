@@ -1,0 +1,13 @@
+//- Long identifiers (txids, addresses).
+//-
+//- Rows show the whole value where there is room and fall back to head…tail
+//- below the 860px breakpoint, where a 64-char txid (384px) cannot fit a
+//- phone's 324px of content. Both forms are emitted and swapped in CSS rather
+//- than picking one server-side, so the choice can depend on viewport width;
+//- the hidden one is display:none, which keeps it out of copy/paste.
+//-
+//- Not used by the homepage's two-column panels — a full txid needs 564px
+//- there and the column is 472px.
+mixin ident(full, short)
+  span.ident-full= full
+  span.ident-abbr= short

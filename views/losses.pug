@@ -1,4 +1,5 @@
 extends layout
+include mixins
 
 block content
   .page-head-row
@@ -22,7 +23,8 @@ block content
             a.hash-link(href=`/block/${l.block_number}`) block #{num(l.block_number)}
             span.chip.chip--red= ruleChip('002')
           else
-            a.hash-link(href=`/transaction/${l.tx_hash}`)= shortHash(l.tx_hash)
+            a.hash-link(href=`/transaction/${l.tx_hash}`)
+              +ident(l.tx_hash, shortHash(l.tx_hash))
             span.chip(class=ruleCategory(l.loss_rules[0]) === 'probable' ? 'chip--amber' : 'chip--red')= ruleChip(l.loss_rules[0])
           span.amt.amt--red(style='flex:1;text-align:right;font-weight:600;color:var(--red)') −#{btc8(l.value_sats)}
         .line2

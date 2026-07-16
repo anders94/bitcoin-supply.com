@@ -608,6 +608,14 @@ main .wrap { padding: 18px 18px 16px; display: flex; flex-direction: column; gap
 
 .hash { font-family: var(--mono); font-size: 10px; word-break: break-all; color: var(--body); }
 
+/* Identifiers in list rows: full length on desktop, head…tail on narrow
+   screens. See the ident mixin in views/mixins.pug. */
+.ident-full { display: none; }
+@media (min-width: 860px) {
+  .ident-full { display: inline; }
+  .ident-abbr { display: none; }
+}
+
 .alert-inset { background: var(--inset); border: 1px solid var(--border); padding: 10px 12px; font-size: 11px; line-height: 1.5; color: var(--body); }
 
 /* ---------- error ---------- */

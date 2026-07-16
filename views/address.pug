@@ -1,4 +1,5 @@
 extends layout
+include mixins
 
 block content
   .page-head
@@ -33,7 +34,9 @@ block content
       if utxos.length
         each u in utxos
           .event-row
-            a.txid(href=`/transaction/${u.tx_hash}`) #{shortHash(u.tx_hash)} : #{u.output_index}
+            a.txid(href=`/transaction/${u.tx_hash}`)
+              +ident(u.tx_hash, shortHash(u.tx_hash))
+              |  : #{u.output_index}
             a.blk(href=`/block/${u.block_number}`)= num(u.block_number)
             each rule in u.loss_rules
               span.chip(class=ruleCategory(rule) === 'probable' ? 'chip--amber' : ruleCategory(rule) === 'quantum' ? 'chip--purple' : 'chip--red')= ruleChip(rule)

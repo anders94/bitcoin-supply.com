@@ -1,4 +1,5 @@
 extends layout
+include mixins
 
 block content
   .page-head
@@ -22,7 +23,8 @@ block content
     .rows(style='font-size:10px')
       each a in topExposed
         .event-row
-          a.txid(href=`/address/${a.address}`)= shortAddress(a.address)
+          a.txid(href=`/address/${a.address}`)
+            +ident(a.address, shortAddress(a.address))
           span.chip.chip--purple= a.is_p2pk ? 'P2PK' : 'EXPOSED-PKH'
           span.yr= num(a.utxo_count) + ' utxos'
           span.amt(style='font-weight:600')= btc8(a.balance)
