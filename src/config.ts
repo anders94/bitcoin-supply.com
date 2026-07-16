@@ -22,6 +22,7 @@ export const config = {
     port: parseInt(process.env.REDISPORT || '6379'),
   },
   server: {
+    host: process.env.HOST || '0.0.0.0',
     port: parseInt(process.env.PORT || '3000'),
   },
   etl: {

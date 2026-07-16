@@ -22,8 +22,8 @@ app.use('/', pageRoutes);
 async function start() {
   await connectRedis();
   await initSSESubscriber();
-  app.listen(config.server.port, () => {
-    console.log(`Server running on port ${config.server.port}`);
+  app.listen(config.server.port, config.server.host, () => {
+    console.log(`Server listening on ${config.server.host}:${config.server.port}`);
   });
 }
 
