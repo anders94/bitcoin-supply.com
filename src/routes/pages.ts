@@ -8,7 +8,7 @@ import { getAllSnapshots } from '../db/snapshots.js';
 import { getComputedStats } from '../db/computed-stats.js';
 import { getRawTransaction } from '../services/bitcoin-rpc.js';
 import {
-  formatBtc, satsToBtc, btcParts, btc8, btc2, num,
+  btcParts, btc8, btc2, num,
   shortHash, shortAddress, dateUtc, dateTimeUtc, subsidyAt,
 } from '../helpers/format.js';
 import {
@@ -20,9 +20,10 @@ const router = Router();
 const CAP_SATS = 2_100_000_000_000_000n;
 const DORMANCY_YEARS = [1, 3, 5, 7, 10, 15, 20];
 
-// Helpers available to every view.
+// Helpers available to every view. BTC figures use btc8 — btc2 is deliberately
+// not exposed here, so a view can't round a satoshi-sized value away to 0.00.
 const viewHelpers = {
-  formatBtc, satsToBtc, btcParts, btc8, btc2, num,
+  btcParts, btc8, num,
   shortHash, shortAddress, dateUtc, dateTimeUtc,
   ruleChip: (rule: string) => `${rule} ${RULE_CHIP_LABELS[rule] ?? ''}`.trim(),
   ruleCategory,
@@ -170,16 +171,17 @@ router.get('/', async (req: Request, res: Response) => {
       effW: (Number(effSats) / Number(CAP_SATS) * 100).toFixed(3),
       oocW: oocN > 0 ? Math.max(0.45, oocN / Number(CAP_SATS) * 100).toFixed(3) : '0',
       qW: Number(effSats) > 0 ? (capN / Number(effSats) * 100).toFixed(2) : '0',
-      dormantValue: btc2(dorm10.sats),
-      activeValue: btc2((BigInt(all.sats) - BigInt(probable.sats) - BigInt(dorm10.sats)).toString()),
+      dormantValue: btc8(dorm10.sats),
+      activeValue: btc8((BigInt(all.sats) - BigInt(probable.sats) - BigInt(dorm10.sats)).toString()),
       q: {
         pct: qTotalN > 0 ? (capN / qTotalN * 100).toFixed(1) + '%' : '0%',
-        captured: (capN / 1e8).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        // The attack sweep interpolates over the curve, so these land between
+        // whole sats; round to a sat and show the full 8 decimals like every
+        // other BTC figure on the site.
+        captured: btc8(BigInt(Math.round(capN))),
         keys: Math.round(interp(keyTbl, capN)).toLocaleString('en-US'),
-        minWorth: minwN >= 1e8
-          ? (minwN / 1e8).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' BTC'
-          : (minwN / 1e8).toFixed(5) + ' BTC',
-        effAfter: (Math.max(Number(effSats) - capN, 0) / 1e8).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        minWorth: btc8(BigInt(Math.round(minwN))) + ' BTC',
+        effAfter: btc8(BigInt(Math.round(Math.max(Number(effSats) - capN, 0)))),
       },
     };
 

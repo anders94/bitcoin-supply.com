@@ -38,7 +38,7 @@ block content
         .event-row
           a.txid(href=`/address/${g.address}`)= shortAddress(g.address)
           span.chip(class=g.chip === 'HASHED' ? 'chip--gray' : 'chip--purple')= g.chip
-          span.amt(style='font-weight:600')= btc2(g.balance)
+          span.amt(style='font-weight:600')= btc8(g.balance)
           span.yr ≥ #{g.age_years}y
 
 block scripts

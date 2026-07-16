@@ -144,7 +144,7 @@ block content
           .row.row--dotted
             span.k effective supply after attack
             span#q-effafter= ssr.q.effAfter
-        .note P2PK #{btc2(supply.quantum.p2pk_sats)} · EXPOSED P2PKH #{btc2(supply.quantum.exposed_pkh_sats)} · TOTAL #{btc2(supply.quantum.total_sats)}
+        .note P2PK #{btc8(supply.quantum.p2pk_sats)} · EXPOSED P2PKH #{btc8(supply.quantum.exposed_pkh_sats)} · TOTAL #{btc8(supply.quantum.total_sats)}
         .note--italic A different cut through the same outputs — never added to the loss total. #[a(href='/quantum', style='color:var(--secondary)') Full quantum explorer →]
 
       //- recent losses

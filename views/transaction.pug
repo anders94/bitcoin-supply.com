@@ -35,7 +35,7 @@ block content
                 span(style='display:flex;gap:8px;align-items:baseline')
                   if vin.prevout.scriptPubKey && vin.prevout.scriptPubKey.address
                     a.hash-link(href=`/address/${vin.prevout.scriptPubKey.address}`)= shortAddress(vin.prevout.scriptPubKey.address)
-                  span= formatBtc(BigInt(Math.round(vin.prevout.value * 1e8)))
+                  span= btc8(BigInt(Math.round(vin.prevout.value * 1e8)))
             else
               span.k coinbase
 
@@ -59,7 +59,7 @@ block content
                 )= ruleChip(rule)
               if classified.loss_bucket === 4 && !classified.loss_rules.length
                 span.chip.chip--purple QUANTUM
-          span(class=classified && classified.loss_bucket === 1 ? 'v--red' : classified && classified.loss_bucket === 2 ? 'v--red' : '')= formatBtc(BigInt(Math.round(vout.value * 1e8)))
+          span(class=classified && classified.loss_bucket === 1 ? 'v--red' : classified && classified.loss_bucket === 2 ? 'v--red' : '')= btc8(BigInt(Math.round(vout.value * 1e8)))
         if vout.scriptPubKey && vout.scriptPubKey.hex
           .row(style='padding-top:0')
             span.hash(style='font-size:8.5px;color:var(--faded)')= vout.scriptPubKey.hex

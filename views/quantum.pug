@@ -3,19 +3,19 @@ extends layout
 block content
   .page-head
     span.label QUANTUM EXPOSURE
-    span.big #{btc2(exposedSats)} BTC exposed
+    span.big #{btc8(exposedSats)} BTC exposed
     span.desc P2PK outputs embed the public key in the script itself. Hashed outputs stay safe until a spend reveals the key — after that, anything left at the address is exposed. The homepage slider sweeps an attack over these outputs, largest keys first.
 
   .rows(style='font-size:10px')
     .row.row--dotted
       span.k P2PK outputs
-      span.v--purple #{btc2(p2pkSats)} BTC · #{num(p2pkCount)} utxos
+      span.v--purple #{btc8(p2pkSats)} BTC · #{num(p2pkCount)} utxos
     .row.row--dotted
       span.k exposed P2PKH
-      span.v--purple #{btc2(BigInt(exposedSats) - BigInt(p2pkSats))} BTC
+      span.v--purple #{btc8(BigInt(exposedSats) - BigInt(p2pkSats))} BTC
     .row.row--dotted
       span.k total exposed
-      span(style='font-weight:600') #{btc2(exposedSats)} BTC · #{num(exposedCount)} utxos
+      span(style='font-weight:600') #{btc8(exposedSats)} BTC · #{num(exposedCount)} utxos
 
   section.section.section--tight
     span.label TOP EXPOSED ADDRESSES · BY BALANCE
@@ -25,6 +25,6 @@ block content
           a.txid(href=`/address/${a.address}`)= shortAddress(a.address)
           span.chip.chip--purple= a.is_p2pk ? 'P2PK' : 'EXPOSED-PKH'
           span.yr= num(a.utxo_count) + ' utxos'
-          span.amt(style='font-weight:600')= btc2(a.balance)
+          span.amt(style='font-weight:600')= btc8(a.balance)
 
   .note--italic A different cut through the same outputs — never added to the loss total. #[a(href='/', style='color:var(--secondary)') Sweep the capture on the homepage →]

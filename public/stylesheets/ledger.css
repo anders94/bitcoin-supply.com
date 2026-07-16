@@ -430,7 +430,9 @@ main .wrap { padding: 18px 18px 16px; display: flex; flex-direction: column; gap
 .page-head { display: flex; flex-direction: column; gap: 3px; }
 .page-head .big {
   font-family: var(--mono);
-  font-size: 18px;
+  /* Stays on one line: full 8-decimal BTC figures run ~30 characters, which
+     overflows a narrow phone at a fixed 18px. */
+  font-size: clamp(13px, 4.4vw, 18px);
   font-weight: 600;
   white-space: nowrap;
 }

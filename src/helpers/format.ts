@@ -1,15 +1,6 @@
-export function satsToBtc(sats: bigint): string {
-  const abs = sats < 0n ? -sats : sats;
-  const sign = sats < 0n ? '-' : '';
-  const whole = abs / 100_000_000n;
-  const frac = (abs % 100_000_000n).toString().padStart(8, '0');
-  return `${sign}${whole}.${frac}`;
-}
-
-export function formatBtc(sats: bigint, decimals = 2): string {
-  const btc = Number(sats) / 1e8;
-  return btc.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-}
+// BTC amounts are always displayed at full satoshi precision (btc8/btcParts) —
+// rounding to 2dp renders a 1-sat loss as "0.00", which is a lie. btc2 exists
+// only for prose summaries (meta descriptions), never for UI figures.
 
 function group(digits: string): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');

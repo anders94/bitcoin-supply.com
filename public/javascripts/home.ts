@@ -116,20 +116,22 @@ function init() {
       el.classList.toggle('dim', !groupOn[el.dataset.group!]);
     });
     $('dormant-row-label').textContent = `Untouched ≥ ${YEARS[y]}y · incl. Satoshi-era`;
-    $('dormant-row-value').textContent = fmtNum(Number(dorm) / 1e8, 2);
+    $('dormant-row-value').textContent = btc8(dorm);
     $('active-row-label').textContent = `Active UTXOs (moved < ${YEARS[y]}y)`;
-    $('active-row-value').textContent = fmtNum(Number(ALL - PROB - dorm) / 1e8, 2);
+    $('active-row-value').textContent = btc8(ALL - PROB - dorm);
     $('ooc-total').textContent = `${btc8(ooc)} · ${fmtNum(oocN / Number(ALL) * 100, 3)}%`;
 
     // quantum readouts
     $('q-pct').textContent = QTOT > 0 ? fmtNum(cap / QTOT * 100, 1) + '%' : '0%';
-    $('q-captured').textContent = fmtNum(cap / 1e8, 2);
+    // The sweep interpolates between curve points, so these are fractional
+    // sats; round to a sat so they print at the same 8-decimal precision as
+    // every other BTC figure (and match the SSR'd values exactly).
+    $('q-captured').textContent = btc8(BigInt(Math.round(cap)));
     $('q-keys').textContent = keys.toLocaleString('en-US');
-    const minwBtc = minw / 1e8;
-    $('q-minworth').textContent = minwBtc >= 1 ? fmtNum(minwBtc, 2) + ' BTC' : minwBtc.toFixed(5) + ' BTC';
-    $('q-effafter').textContent = fmtNum(Math.max(effN - cap, 0) / 1e8, 2);
+    $('q-minworth').textContent = btc8(BigInt(Math.round(minw))) + ' BTC';
+    $('q-effafter').textContent = btc8(BigInt(Math.round(Math.max(effN - cap, 0))));
     const subQ = document.getElementById('hero-sub-q');
-    if (subQ) subQ.textContent = fmtNum(cap / 1e8, 2);
+    if (subQ) subQ.textContent = btc8(BigInt(Math.round(cap)));
   }
 
   function makeSlider(id: string, start: number, max: number, step: number, onUpdate: (v: number) => void) {
