@@ -325,31 +325,50 @@ async function halvings(tipBlock: number, tipTs: Date): Promise<void> {
   await upsertComputedStat('halvings', { events }, tipBlock);
 }
 
-// Largest balances that have not moved in years, for the /utxos page.
-async function dormantGiants(tipBlock: number, tipTs: Date): Promise<void> {
-  const { rows } = await pool.query(`
-    SELECT a.address, a.utxo_value_sats::text AS balance, a.utxo_count,
-           a.pubkey_exposed, a.is_p2pk, b.block_timestamp AS last_active_ts
-    FROM address_info a
-    LEFT JOIN blocks b ON b.block_number = COALESCE(a.last_active_block, a.first_seen_block)
-    WHERE a.utxo_count > 0
-    ORDER BY a.utxo_value_sats DESC LIMIT 200
-  `);
+const GIANT_MIN_AGE_YEARS = 5;
 
-  const giants = rows
-    .map(r => {
-      const age = r.last_active_ts
-        ? Math.floor((tipTs.getTime() - new Date(r.last_active_ts).getTime()) / (YEAR_SECONDS * 1000))
-        : 0;
-      return {
-        address: r.address,
-        balance: r.balance,
-        age_years: age,
-        chip: r.is_p2pk ? 'P2PK' : r.pubkey_exposed ? 'Q-EXPOSED' : 'HASHED',
-      };
-    })
-    .filter(g => g.age_years >= 5)
-    .slice(0, 12);
+// Largest individual outputs untouched for years, for the /utxos page.
+//
+// Dormancy is per-output (utxos.block_timestamp), matching the dormant_Ny
+// snapshots. It deliberately does NOT come from address_info.last_active_block:
+// that is bumped on receives as well as spends, so dust sent to a famous
+// dormant address makes it look active — 1FeexV6…, holding ~79,957 BTC
+// untouched since 2011, reads as last-active-today because of dust.
+async function dormantGiants(tipBlock: number, tipTs: Date): Promise<void> {
+  const cutoffTs = new Date(tipTs.getTime() - GIANT_MIN_AGE_YEARS * YEAR_SECONDS * 1000);
+
+  // Translate the age cutoff into a block height so partition pruning applies.
+  // Filtering on block_timestamp instead makes the planner merge-append every
+  // partition's value_sats index — including epochs that cannot hold a row old
+  // enough — and the query runs for minutes rather than milliseconds.
+  const { rows: [cut] } = await pool.query(
+    'SELECT MAX(block_number) AS b FROM blocks WHERE block_timestamp <= $1', [cutoffTs]
+  );
+  if (cut?.b == null) {
+    await upsertComputedStat('dormant_giants', { giants: [] }, tipBlock);
+    return;
+  }
+
+  // Filter and order in SQL: the previous version took the 200 largest
+  // balances and only then filtered for age, but the largest balances are
+  // exchange wallets that move constantly, so nothing ever survived.
+  const { rows } = await pool.query(`
+    SELECT tx_hash, output_index, value_sats::text AS value, block_timestamp,
+           script_type, pubkey_exposed
+    FROM utxos
+    WHERE block_number <= $1 AND loss_bucket IN (0, 4)
+    ORDER BY value_sats DESC LIMIT 12
+  `, [Number(cut.b)]);
+
+  const giants = rows.map(r => ({
+    tx_hash: r.tx_hash,
+    output_index: r.output_index,
+    value: r.value,
+    age_years: Math.floor(
+      (tipTs.getTime() - new Date(r.block_timestamp).getTime()) / (YEAR_SECONDS * 1000)
+    ),
+    chip: r.script_type === 'pubkey' ? 'P2PK' : r.pubkey_exposed ? 'Q-EXPOSED' : 'HASHED',
+  }));
 
   await upsertComputedStat('dormant_giants', { giants }, tipBlock);
 }
