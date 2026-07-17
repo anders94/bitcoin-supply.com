@@ -629,6 +629,31 @@ router.get('/proposals', (req: Request, res: Response) => {
   }
 });
 
+// GET /proposals/:id.md - the raw proposal markdown.
+//
+// The classification rules are the substance of this site, and they are already
+// authored as markdown — this hands them to an LLM (or anyone) in their native
+// form, front-matter table and all, instead of making them scrape the rendered
+// page. Must be registered before /proposals/:id, which would otherwise match
+// "004.md" as the id. The file is looked up via readProposals() by validated
+// 3-digit id, never built from the raw param, so there is no path traversal.
+router.get('/proposals/:id.md', (req: Request, res: Response) => {
+  try {
+    const id = (req.params['id'] ?? '').slice(0, 3);
+    const meta = readProposals().find(p => p.id === id);
+    if (!meta) return renderError(res, 404, 'Proposal not found');
+
+    const raw = fs.readFileSync(path.join(process.cwd(), 'proposals', meta.file), 'utf8');
+    res.type('text/markdown; charset=utf-8');
+    // Changes only on deploy, like the rendered proposal pages.
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=10800');
+    res.send(raw);
+  } catch (err) {
+    console.error(err);
+    renderError(res, 500, 'Failed to load proposal');
+  }
+});
+
 // GET /proposals/:id - Proposal detail
 router.get('/proposals/:id', async (req: Request, res: Response) => {
   try {
@@ -733,6 +758,89 @@ router.get('/sitemap.xml', async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     res.status(500).type('text/plain').send('sitemap unavailable');
+  }
+});
+
+// GET /llms.txt - an LLM-oriented index of the site (see llmstxt.org).
+//
+// A curated map: the premise (which a crawler can't infer from a UTXO table),
+// then pointers to the canonical pages, the JSON API, and the raw rule files.
+// A route, not a static file, so the proposal list stays current and it dodges
+// the *.txt gitignore rule. It advertises the structured data we expose so an
+// agent never has to scrape HTML.
+router.get('/llms.txt', (req: Request, res: Response) => {
+  try {
+    const base = config.server.publicUrl;
+    const proposals = readProposals();
+
+    const md = `# bitcoin-supply.com
+
+> Bitcoin's 21 million cap is a ceiling, not a count of coins in circulation.
+> This site measures the *effective* supply: how much BTC is provably lost,
+> probably lost, dormant, or exposed to a future quantum attacker — computed
+> UTXO by UTXO from a fully-indexed Bitcoin Core node.
+
+Every figure traces to a public, versioned classification rule; nothing is an
+estimate unless labelled as one. "Provably lost" is mathematically certain
+(coin spent to unspendable conditions, or never claimed by a miner). "Probably
+lost" is judged (known burn addresses). "Dormant" is coin untouched for years.
+"Quantum-exposed" is a separate lens: spendable coin whose public key is already
+revealed on-chain. These are distinct axes — dormant or quantum coin is not
+counted as lost.
+
+## Start here
+
+- [About and methodology](${base}/about): what effective supply means and how the figures are computed.
+- [Effective supply explorer](${base}/): the headline numbers with interactive loss/quantum sliders.
+- [Loss history](${base}/losses): every provably or probably lost output, newest first.
+- [Quantum exposure](${base}/quantum): coin sitting behind exposed public keys.
+- [The UTXO set](${base}/utxos): the unspent set by age and value.
+
+## Structured data (JSON API)
+
+Prefer these over scraping HTML. Aggregate endpoints (cached, cheap):
+
+- [Supply stats](${base}/api/v1/stats): circulating vs. lost vs. quantum totals at the current tip.
+- [Loss breakdown](${base}/api/v1/loss-breakdown): lost coin grouped by classification rule.
+- [Dormancy curve](${base}/api/v1/dormancy-curve): balance by how long it has sat unmoved.
+- [Quantum totals](${base}/api/v1/quantum) and [quantum curve](${base}/api/v1/quantum-curve): exposed-key exposure.
+- [Concentration](${base}/api/v1/concentration): largest holdings.
+
+Per-entity endpoints (JSON siblings of the deep pages; substitute the parameter):
+
+- \`${base}/api/v1/address/{address}\`: balance, UTXOs, and per-output loss/quantum status for one address.
+- \`${base}/api/v1/block/{height}\`: supply accounting (subsidy, fees, miner loss, lost outputs) for one block.
+- \`${base}/api/v1/transaction/{txid}\`: outputs with per-output loss classification for one transaction.
+
+## The classification rules
+
+The substance of the site. Each is authored as markdown and served raw at the
+\`.md\` URL below (the front-matter table carries status, category, and scale
+estimate). The full index is at [${base}/proposals](${base}/proposals).
+
+${proposals.map(p => {
+  const status = (p.fields['Status'] ?? 'Draft');
+  const scale = (p.fields['Scale Estimate'] ?? '').trim();
+  // Show the scale verbatim only when it's an actual figure — the field is
+  // free-form and holds placeholders ("xxxx", "TBD", "Variable") and values
+  // that already carry their own "~". Never prepend our own approximation mark.
+  const hasScale = /\d/.test(scale) && !/x{3,}/i.test(scale);
+  const suffix = hasScale ? ` — ${status}, ${scale}` : ` — ${status}`;
+  return `- [Proposal ${p.id} — ${p.title}](${base}/proposals/${p.id}.md)${suffix}`;
+}).join('\n')}
+
+## Notes for automated clients
+
+- Deep pages (\`/block/*\`, \`/transaction/*\`, \`/address/*\`) are disallowed to bulk crawlers in [robots.txt](${base}/robots.txt) because they are an unbounded, database-heavy URL space. Use the JSON API instead, or fetch a single page when a user asks for it.
+- This site is open source: https://github.com/anders94/bitcoin-supply.com — for bulk access, please get in touch rather than scraping.
+`;
+
+    res.type('text/markdown; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=10800');
+    res.send(md);
+  } catch (err) {
+    console.error(err);
+    res.status(500).type('text/plain').send('llms.txt unavailable');
   }
 });
 
