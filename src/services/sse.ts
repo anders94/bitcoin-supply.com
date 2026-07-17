@@ -1,10 +1,17 @@
 import { Response } from 'express';
-import { redisClient } from './redis.js';
-import { getTip } from './tip.js';
+import { getTip, refreshTip } from './tip.js';
 
-// SSE clients connect to the web server process, but block events originate in
-// the separate ETL process — they are bridged over a Redis pub/sub channel.
-const CHANNEL = 'sse:blocks';
+// Block events used to be bridged from the ETL over Redis pub/sub, which forced
+// both processes onto one Redis instance. They are on different machines, so
+// that meant either exposing Redis across the network or never delivering the
+// events at all. Instead the web server watches the tip itself.
+//
+// Blocks arrive ~11 minutes apart (measured: 664s mean), so a 15s poll spots one
+// within ~2% of the interval — for an indicator that reads "3m ago", nobody can
+// tell. The cost is four index scans a minute of a single row, and it doubles as
+// what keeps the tip cache warm. In exchange Redis stays loopback-only with no
+// password, and the ETL needs no Redis at all.
+const POLL_MS = 15_000;
 
 // Blocks arrive ~11 minutes apart, so without this the stream sits silent long
 // enough for any intermediary to assume it died: nginx's default
@@ -61,46 +68,32 @@ export function broadcastSSE(event: object): void {
   }
 }
 
-// How long to wait on a publish before giving up on it. A publish to Redis on
-// the local network should take single-digit milliseconds; this is only ever
-// reached when something is wrong.
-const PUBLISH_TIMEOUT_MS = 2_000;
+let lastSeenHeight = 0;
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timer: NodeJS.Timeout;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);
-    timer.unref();
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-
-// Called by the ETL process. Best-effort by design: it is awaited inside the
-// live sync's block loop, so an unhandled rejection would abort the whole batch
-// and leave the ETL crawling one block per poll. The live tip is cosmetic;
-// indexing the chain is not, and it must not depend on this.
-//
-// The timeout matters as much as the catch. node-redis queues commands while
-// disconnected rather than rejecting, so a bare await here would stall the sync
-// loop indefinitely waiting to reconnect — silently, with no error to catch.
-export async function publishSSE(event: object): Promise<void> {
+async function pollForNewBlock(): Promise<void> {
   try {
-    await withTimeout(redisClient.publish(CHANNEL, JSON.stringify(event)), PUBLISH_TIMEOUT_MS);
+    const tip = await refreshTip();
+    // Guard on > 0 so a transient database failure can never broadcast a zero
+    // tip and blank the header on every connected client.
+    if (tip.height > 0 && tip.height !== lastSeenHeight) {
+      lastSeenHeight = tip.height;
+      broadcastSSE({ type: 'block', block_number: tip.height, block_timestamp: tip.timestamp });
+    }
   } catch (err) {
-    console.error('SSE publish failed (non-fatal):', (err as Error).message);
+    console.error('Block poll failed (non-fatal):', (err as Error).message);
   }
 }
 
 // Called by the web server process at startup.
-export async function initSSESubscriber(): Promise<void> {
-  const subscriber = redisClient.duplicate();
-  subscriber.on('error', (err) => console.error('Redis subscriber error:', err));
-  await subscriber.connect();
-  await subscriber.subscribe(CHANNEL, (message) => {
-    try {
-      broadcastSSE(JSON.parse(message));
-    } catch (err) {
-      console.error('Bad SSE message on', CHANNEL, err);
-    }
-  });
+export async function startBlockPoller(): Promise<void> {
+  // Seed first, so the tip that already exists isn't announced as new. Failure
+  // is fine — height stays 0 and the first poll announces whatever it finds, to
+  // an empty client set.
+  try {
+    lastSeenHeight = (await refreshTip()).height;
+  } catch (err) {
+    console.error('Initial tip read failed:', (err as Error).message);
+  }
+  const timer = setInterval(pollForNewBlock, POLL_MS);
+  timer.unref();
 }

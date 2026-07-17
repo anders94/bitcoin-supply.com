@@ -1,6 +1,5 @@
 import { getBlock, getBlockHash, getBlockCount } from '../services/bitcoin-rpc.js';
 import { processBlock } from './block-processor.js';
-import { publishSSE } from '../services/sse.js';
 import { pool } from '../db/index.js';
 import { config } from '../config.js';
 import { getLastSyncedBlock, setLastSyncedBlock } from './historical-sync.js';
@@ -39,14 +38,9 @@ export async function runLiveSync(): Promise<void> {
         await processBlock(block, knownBurnAddresses);
         await setLastSyncedBlock(height);
 
-        await publishSSE({
-          type: 'block',
-          block_number: block.height,
-          block_hash: hash,
-          tx_count: block.tx.length,
-          block_timestamp: new Date(block.time * 1000).toISOString(),
-        });
-
+        // No SSE publish here: the web server polls the tip itself (see
+        // services/sse.ts). This loop is the critical path and must not depend
+        // on a message bus to another machine for a cosmetic feature.
         console.log(`Live block ${block.height}: ${hash}`);
       }
     } catch (err) {
