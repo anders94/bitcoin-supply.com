@@ -30,6 +30,10 @@ export const config = {
   redis: {
     host: process.env.REDISHOST || '127.0.0.1',
     port: parseInt(process.env.REDISPORT || '6379'),
+    // Required once Redis listens past loopback: binding to another interface
+    // takes it out from behind protected-mode, so it must have a password.
+    // Undefined means no AUTH, which is correct for a loopback-only instance.
+    password: process.env.REDISPASSWORD || undefined,
   },
   server: {
     host: process.env.HOST || '0.0.0.0',

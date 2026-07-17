@@ -7,7 +7,7 @@ import { pool } from '../db/index.js';
 import { getAllSnapshots } from '../db/snapshots.js';
 import { getComputedStats } from '../db/computed-stats.js';
 import { getRawTransaction } from '../services/bitcoin-rpc.js';
-import { cacheGet, cacheSet } from '../services/redis.js';
+import { getTip } from '../services/tip.js';
 import { pageCache } from '../middleware/page-cache.js';
 import {
   btcParts, btc8, btc2, num,
@@ -53,35 +53,6 @@ router.use((req: Request, res: Response, next) => {
   };
   next();
 });
-
-interface Tip { height: number; timestamp: string }
-
-const TIP_KEY = 'tip';
-const TIP_TTL = 30;
-
-// This ran against Postgres on every single request — including the 404s that
-// bot URL scanning generates by the thousand. One Redis key, so there is no
-// cardinality risk, and blocks only arrive every ~10 minutes anyway. A Redis
-// outage falls back to the query rather than to a zero tip.
-async function getTip(): Promise<Tip> {
-  try {
-    const cached = await cacheGet(TIP_KEY);
-    if (cached) return JSON.parse(cached) as Tip;
-  } catch { /* redis down — fall through to the database */ }
-
-  try {
-    const { rows } = await pool.query(
-      'SELECT block_number, block_timestamp FROM blocks ORDER BY block_number DESC LIMIT 1'
-    );
-    const tip: Tip = rows[0]
-      ? { height: Number(rows[0].block_number), timestamp: new Date(rows[0].block_timestamp).toISOString() }
-      : { height: 0, timestamp: new Date(0).toISOString() };
-    cacheSet(TIP_KEY, JSON.stringify(tip), TIP_TTL).catch(() => { /* non-fatal */ });
-    return tip;
-  } catch {
-    return { height: 0, timestamp: new Date(0).toISOString() };
-  }
-}
 
 // Every page's header shows the live tip; seed it via SSR on each request.
 router.use(async (req: Request, res: Response, next) => {

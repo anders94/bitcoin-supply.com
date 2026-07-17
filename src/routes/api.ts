@@ -298,8 +298,8 @@ router.get('/concentration', async (req: Request, res: Response) => {
 });
 
 // GET /api/v1/events (SSE)
-router.get('/events', (req: Request, res: Response) => {
-  addSSEClient(res);
+router.get('/events', async (req: Request, res: Response) => {
+  await addSSEClient(res);
 });
 
 export default router;
