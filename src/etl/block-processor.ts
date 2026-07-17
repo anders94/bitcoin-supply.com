@@ -70,15 +70,16 @@ export async function processBlock(block: any, knownBurnAddresses: Set<string>):
         for (const vin of tx.vin) {
           if (!vin.txid) continue;
 
-          // Delete the spent UTXO
-          await deleteUtxo(client, vin.txid, vin.vout);
+          // Delete the spent UTXO. Decrement address_info only if this delete
+          // actually removed a row — a replayed spend (reprocessed block) finds
+          // it already gone, and decrementing again would drift the counters.
+          const deleted = await deleteUtxo(client, vin.txid, vin.vout);
 
-          // Update address activity. Zero-value outputs are never inserted (see
-          // the output loop), so they were never counted in address_info —
-          // decrementing on their spend would corrupt the count. Skip them.
-          if (vin.prevout?.scriptPubKey?.address) {
+          if (deleted && vin.prevout?.scriptPubKey?.address) {
             const addr = vin.prevout.scriptPubKey.address;
             const spentSats = BigInt(Math.round(vin.prevout.value * 1e8));
+            // Zero-value outputs are never inserted, so a real delete implies
+            // value > 0; the guard is belt-and-braces.
             if (spentSats > 0n) {
               await upsertAddressInfo(client, addr, blockNumber, false, spentSats);
             }
@@ -135,7 +136,7 @@ export async function processBlock(block: any, knownBurnAddresses: Set<string>):
         // P2PK outputs have the pubkey in the script itself
         const p2pkPubkey = extractP2PKPubkey(scriptHex);
 
-        await insertUtxo(client, {
+        const inserted = await insertUtxo(client, {
           tx_hash: tx.txid,
           output_index: i,
           value_sats: valueSats,
@@ -150,11 +151,16 @@ export async function processBlock(block: any, knownBurnAddresses: Set<string>):
           pubkey_hex: p2pkPubkey,
         });
 
-        if (address) {
+        // Increment address_info only if a row was actually inserted. On a
+        // reprocessed block the insert is a no-op (ON CONFLICT), so a blind
+        // increment here is exactly what drifted the counters — and left
+        // "ghost" balances on fully-spent addresses. P2PK marking is idempotent
+        // (sets a flag WHERE pubkey_hex IS NULL), so it needn't be gated.
+        if (address && inserted) {
           await upsertAddressInfo(client, address, blockNumber, true, valueSats);
-          if (p2pkPubkey !== null) {
-            await markAddressP2PKExposed(client, address);
-          }
+        }
+        if (address && p2pkPubkey !== null) {
+          await markAddressP2PKExposed(client, address);
         }
       }
     }
