@@ -1,19 +1,24 @@
 # bitcoin-supply.com
 #
-# Crawlers are welcome. The aggregate pages below are cheap to serve — they read
-# from precomputed tables — and they're the ones worth indexing anyway. Please
-# do crawl them.
+# The rule here is about *bulk*, not about bots. We're happy to be read. What we
+# can't absorb is having our unbounded pages walked exhaustively: ~958,000
+# blocks, hundreds of millions of addresses, and every transaction ever made.
+# Each of those pages costs real database work against a 166M-row table, and
+# nobody is served by harvesting them one at a time — it's public Bitcoin chain
+# data, available far more efficiently from a node, and the summaries you
+# probably want are precomputed on the aggregate pages we do allow.
 #
-# The disallowed paths are a different story: they're an unbounded URL space
-# (~958,000 blocks, hundreds of millions of addresses, every transaction ever)
-# and each one costs real database work against a 166M-row table. Walking them
-# serves nobody: the pages are generated from public Bitcoin chain data you can
-# get more efficiently from a node, and the aggregates you probably want are
-# already summarised on the pages we do allow.
+# So: aggregate pages are open to everyone. Deep pages are open to agents
+# fetching a page because a human just asked for it, and closed to crawlers
+# walking the space.
 #
-# There's a JSON API documented at /about if you want structured data.
-# Questions, or need bulk access? The site is open source — see the repo.
+# There's a JSON API documented at /about. Need bulk access? The site is open
+# source — please get in touch rather than scraping.
 
+
+# ---------------------------------------------------------------------------
+# Everything not named below. Aggregate pages: yes. Deep pages: no.
+# ---------------------------------------------------------------------------
 User-agent: *
 Disallow: /block/
 Disallow: /transaction/
@@ -21,5 +26,26 @@ Disallow: /address/
 Disallow: /losses?
 Disallow: /search
 Disallow: /api/
+
+
+# ---------------------------------------------------------------------------
+# User-triggered agents — the whole site, deep pages included.
+#
+# These aren't crawlers. Each request happens because a person asked a question
+# and is waiting on the answer, so it's one page, not a million. That's a human
+# reading the site with extra steps, which is exactly what it's here for.
+#
+# (robots.txt groups do NOT inherit from *, so naming an agent here grants it
+# everything this group doesn't deny. Deliberately no "Allow: /" — it's
+# redundant, and parsers that take the first match rather than the longest one
+# let it swallow the two Disallows below. Only the SSE stream and the search
+# form are excluded: /api/v1/events never closes and would just hang an agent.)
+# ---------------------------------------------------------------------------
+User-agent: ChatGPT-User
+User-agent: Claude-User
+User-agent: Perplexity-User
+Disallow: /api/v1/events
+Disallow: /search
+
 
 Sitemap: https://bitcoin-supply.com/sitemap.xml
