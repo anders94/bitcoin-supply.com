@@ -37,16 +37,27 @@ function clientIp(req: express.Request): string {
   return ip.startsWith('::ffff:') ? ip.slice(7) : ip;
 }
 
+// User-Agent, last and quoted so the line stays awk-parseable on whitespace.
+// Truncated because crawlers send novels, and quotes stripped so the field
+// can't be broken from outside.
+function userAgent(req: express.Request): string {
+  return (req.get('user-agent') || '-').replace(/"/g, "'").slice(0, 120);
+}
+
 // One line per request. svlogd (-tt) prefixes the timestamp, so don't add one.
+// Format: <ip> <method> <url> <status> <ms> <cache> "<user-agent>"
 app.use((req, res, next) => {
   const start = performance.now();
   const ip = clientIp(req); // capture now; the socket is gone by 'close'
+  const ua = userAgent(req);
   let logged = false;
   const log = () => {
     if (logged) return; // 'finish' and 'close' can both fire
     logged = true;
     const ms = (performance.now() - start).toFixed(1);
-    console.log(`${ip} ${req.method} ${req.originalUrl} ${res.statusCode} ${ms}ms`);
+    // Set by the page cache; '-' for routes it doesn't cover.
+    const cache = res.locals.cacheStatus || '-';
+    console.log(`${ip} ${req.method} ${req.originalUrl} ${res.statusCode} ${ms}ms ${cache} "${ua}"`);
   };
   res.on('finish', log); // response fully handed off
   res.on('close', log);  // client hung up early

@@ -7,6 +7,8 @@ import { pool } from '../db/index.js';
 import { getAllSnapshots } from '../db/snapshots.js';
 import { getComputedStats } from '../db/computed-stats.js';
 import { getRawTransaction } from '../services/bitcoin-rpc.js';
+import { cacheGet, cacheSet } from '../services/redis.js';
+import { pageCache } from '../middleware/page-cache.js';
 import {
   btcParts, btc8, btc2, num,
   shortHash, shortAddress, dateUtc, dateTimeUtc, subsidyAt,
@@ -34,6 +36,11 @@ const OG_DEFAULT_DESCRIPTION =
   'probably lost, dormant, or exposed to a quantum attacker — measured UTXO by UTXO ' +
   'from full-chain analysis.';
 
+// Serve the canonical pages from Redis where possible. Registered first, on
+// purpose: a hit returns before the meta/tip middlewares below, so it costs no
+// database work at all.
+router.use(pageCache());
+
 // Social-preview metadata. Routes overwrite `description` (and occasionally
 // `ogTitle`) on res.locals.meta; the layout renders the tags.
 router.use((req: Request, res: Response, next) => {
@@ -47,19 +54,38 @@ router.use((req: Request, res: Response, next) => {
   next();
 });
 
-// Every page's header shows the live tip; seed it via SSR on each request.
-router.use(async (req: Request, res: Response, next) => {
+interface Tip { height: number; timestamp: string }
+
+const TIP_KEY = 'tip';
+const TIP_TTL = 30;
+
+// This ran against Postgres on every single request — including the 404s that
+// bot URL scanning generates by the thousand. One Redis key, so there is no
+// cardinality risk, and blocks only arrive every ~10 minutes anyway. A Redis
+// outage falls back to the query rather than to a zero tip.
+async function getTip(): Promise<Tip> {
+  try {
+    const cached = await cacheGet(TIP_KEY);
+    if (cached) return JSON.parse(cached) as Tip;
+  } catch { /* redis down — fall through to the database */ }
+
   try {
     const { rows } = await pool.query(
       'SELECT block_number, block_timestamp FROM blocks ORDER BY block_number DESC LIMIT 1'
     );
-    res.locals.tip = rows[0]
+    const tip: Tip = rows[0]
       ? { height: Number(rows[0].block_number), timestamp: new Date(rows[0].block_timestamp).toISOString() }
       : { height: 0, timestamp: new Date(0).toISOString() };
+    cacheSet(TIP_KEY, JSON.stringify(tip), TIP_TTL).catch(() => { /* non-fatal */ });
+    return tip;
   } catch {
-    res.locals.tip = { height: 0, timestamp: new Date(0).toISOString() };
+    return { height: 0, timestamp: new Date(0).toISOString() };
   }
-  res.locals.tip.lag = config.etl.confirmationLag;
+}
+
+// Every page's header shows the live tip; seed it via SSR on each request.
+router.use(async (req: Request, res: Response, next) => {
+  res.locals.tip = { ...await getTip(), lag: config.etl.confirmationLag };
   next();
 });
 
@@ -585,10 +611,16 @@ interface ProposalMeta {
   fields: Record<string, string>;
 }
 
+// Memoized: this walks the proposals directory and re-parses every markdown
+// file synchronously, blocking the event loop. The files only change on deploy,
+// so once per process is enough.
+let proposalsMemo: ProposalMeta[] | null = null;
+
 function readProposals(): ProposalMeta[] {
+  if (proposalsMemo) return proposalsMemo;
   const proposalsDir = path.join(process.cwd(), 'proposals');
   const files = fs.readdirSync(proposalsDir).filter(f => f.endsWith('.md')).sort();
-  return files.map(file => {
+  proposalsMemo = files.map(file => {
     const content = fs.readFileSync(path.join(proposalsDir, file), 'utf8');
     const lines = content.split('\n');
     const title = (lines[0]?.replace(/^#+\s*/, '') ?? file)
@@ -601,6 +633,7 @@ function readProposals(): ProposalMeta[] {
     }
     return { id: file.slice(0, 3), file, title, fields };
   });
+  return proposalsMemo;
 }
 
 // GET /proposals - Classification rule index
@@ -683,6 +716,52 @@ router.get('/proposals/:id', async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     renderError(res, 500, 'Failed to load proposal');
+  }
+});
+
+// GET /sitemap.xml - the canonical pages only.
+//
+// Deliberately omits /block/:n, /transaction/:hash and /address/:addr: they are
+// an unbounded URL space and expensive to serve, and robots.txt disallows them.
+// This file is the positive half of that bargain — it tells crawlers exactly
+// what we do want indexed, so being restrictive costs us no discoverability.
+router.get('/sitemap.xml', async (req: Request, res: Response) => {
+  try {
+    const base = config.server.publicUrl;
+    // Snapshots are recomputed hourly by the ETL; that is the site's real
+    // lastmod, since every aggregate page is rendered from them.
+    const stats = await getComputedStats(['rule_breakdown']);
+    const computedAt = stats['rule_breakdown']?.computed_at;
+    const lastmod = (computedAt ? new Date(computedAt) : new Date()).toISOString();
+
+    const pages: { loc: string; changefreq: string; priority: string }[] = [
+      { loc: '/', changefreq: 'hourly', priority: '1.0' },
+      { loc: '/losses', changefreq: 'hourly', priority: '0.8' },
+      { loc: '/quantum', changefreq: 'hourly', priority: '0.8' },
+      { loc: '/utxos', changefreq: 'hourly', priority: '0.8' },
+      { loc: '/proposals', changefreq: 'monthly', priority: '0.6' },
+      { loc: '/about', changefreq: 'monthly', priority: '0.5' },
+      ...readProposals().map(p => ({
+        loc: `/proposals/${p.id}`, changefreq: 'monthly', priority: '0.4',
+      })),
+    ];
+
+    const xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+      pages.map(p =>
+        '  <url>\n' +
+        `    <loc>${base}${p.loc}</loc>\n` +
+        `    <lastmod>${lastmod}</lastmod>\n` +
+        `    <changefreq>${p.changefreq}</changefreq>\n` +
+        `    <priority>${p.priority}</priority>\n` +
+        '  </url>\n'
+      ).join('') +
+      '</urlset>\n';
+
+    res.type('application/xml').send(xml);
+  } catch (err) {
+    console.error(err);
+    res.status(500).type('text/plain').send('sitemap unavailable');
   }
 });
 

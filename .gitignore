@@ -28,5 +28,7 @@ scripts/.fonts/
 
 # misc
 *.txt
+# ...but robots.txt is served to crawlers and must ship
+!public/robots.txt
 *~
 .*~

@@ -1,0 +1,25 @@
+# bitcoin-supply.com
+#
+# Crawlers are welcome. The aggregate pages below are cheap to serve — they read
+# from precomputed tables — and they're the ones worth indexing anyway. Please
+# do crawl them.
+#
+# The disallowed paths are a different story: they're an unbounded URL space
+# (~958,000 blocks, hundreds of millions of addresses, every transaction ever)
+# and each one costs real database work against a 166M-row table. Walking them
+# serves nobody: the pages are generated from public Bitcoin chain data you can
+# get more efficiently from a node, and the aggregates you probably want are
+# already summarised on the pages we do allow.
+#
+# There's a JSON API documented at /about if you want structured data.
+# Questions, or need bulk access? The site is open source — see the repo.
+
+User-agent: *
+Disallow: /block/
+Disallow: /transaction/
+Disallow: /address/
+Disallow: /losses?
+Disallow: /search
+Disallow: /api/
+
+Sitemap: https://bitcoin-supply.com/sitemap.xml
