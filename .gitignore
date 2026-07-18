@@ -26,6 +26,9 @@ run
 # OG card generator font cache (fetched on first run)
 scripts/.fonts/
 
+# Local on-disk read-through cache (node:sqlite)
+cache/
+
 # misc
 *.txt
 # ...but robots.txt is served to crawlers and must ship

@@ -27,6 +27,22 @@ export const config = {
     password: process.env.PGPASSWORD || 'changeme',
     max: 20,
   },
+  // Local on-disk cache (node:sqlite) for immutable data — block metadata/loss
+  // rows and confirmed raw transactions — so the web server stops round-tripping
+  // to the remote Postgres/bitcoind for things that never change. Read-through
+  // with fallback: any miss or error goes to the remote source, so the cache
+  // can only make things faster, never wrong.
+  cache: {
+    enabled: process.env.CACHE_ENABLED !== 'false',
+    dir: process.env.CACHE_DIR || './cache',
+    // Don't cache anything within this many blocks of the tip — a reorg could
+    // still rewrite it. Matches the ETL's confirmation lag: below tip-N the DB
+    // itself treats a block as final.
+    reorgDepth: parseInt(process.env.CACHE_REORG_DEPTH || '6'),
+    // Soft cap on cached transactions (~2.4 KB each). 8M ≈ 19 GB, under a 20 GB
+    // budget. Oldest are pruned past this.
+    maxTxRows: parseInt(process.env.CACHE_MAX_TX || '8000000'),
+  },
   redis: {
     host: process.env.REDISHOST || '127.0.0.1',
     port: parseInt(process.env.REDISPORT || '6379'),

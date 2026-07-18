@@ -4,7 +4,8 @@ import { getComputedStats } from '../db/computed-stats.js';
 import { withCache } from '../services/redis.js';
 import { addSSEClient } from '../services/sse.js';
 import { config } from '../config.js';
-import { getRawTransaction } from '../services/bitcoin-rpc.js';
+import { getCachedRawTransaction } from '../services/tx-data.js';
+import { loadBlock } from '../services/block-data.js';
 import { subsidyAt } from '../helpers/format.js';
 import { bucketLabel, describeRules, money } from '../helpers/loss-describe.js';
 
@@ -320,21 +321,9 @@ router.get('/block/:n', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid block number' });
     }
 
-    const { rows: blockRows } = await pool.query('SELECT * FROM blocks WHERE block_number = $1', [blockNum]);
-    if (!blockRows.length) {
-      return res.status(404).json({ error: `Block ${blockNum} is not indexed` });
-    }
-    const block = blockRows[0];
-
-    const { rows: lossUtxos } = await pool.query(`
-      SELECT tx_hash, output_index, value_sats, loss_rules, loss_bucket
-      FROM utxos WHERE loss_bucket IN (1, 2) AND block_number = $1
-      ORDER BY value_sats DESC LIMIT 100
-    `, [blockNum]);
-    const { rows: txLossRows } = await pool.query(`
-      SELECT COALESCE(SUM(value_sats), 0) AS total, COUNT(*) AS n FROM utxos
-      WHERE loss_bucket IN (1, 2) AND block_number = $1
-    `, [blockNum]);
+    const data = await loadBlock(blockNum);
+    if (!data) return res.status(404).json({ error: `Block ${blockNum} is not indexed` });
+    const { block, lossOutputs: lossUtxos, lossCount } = data;
 
     // Same supply arithmetic the page renders: subsidy is derived from height,
     // fees are whatever the block was allowed to issue above the subsidy, and
@@ -343,8 +332,7 @@ router.get('/block/:n', async (req: Request, res: Response) => {
     const allowed = BigInt(block.allowed_supply_sats ?? 0);
     const fees = allowed > subsidy ? allowed - subsidy : 0n;
     const minerLoss = BigInt(block.miner_loss_sats ?? 0);
-    const txLoss = BigInt(txLossRows[0].total);
-    const lossCount = Number(txLossRows[0].n);
+    const txLoss = BigInt(data.lossSats);
 
     res.set('Cache-Control', ENTITY_CACHE_CONTROL);
     res.json({
@@ -464,7 +452,7 @@ router.get('/transaction/:hash', async (req: Request, res: Response) => {
 
     let tx: any;
     try {
-      tx = await getRawTransaction(txHash);
+      tx = await getCachedRawTransaction(txHash);
     } catch {
       return res.status(404).json({ error: 'Transaction not found' });
     }

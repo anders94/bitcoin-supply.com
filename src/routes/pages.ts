@@ -6,8 +6,9 @@ import { config } from '../config.js';
 import { pool } from '../db/index.js';
 import { getAllSnapshots } from '../db/snapshots.js';
 import { getComputedStats } from '../db/computed-stats.js';
-import { getRawTransaction } from '../services/bitcoin-rpc.js';
+import { getCachedRawTransaction } from '../services/tx-data.js';
 import { getTip } from '../services/tip.js';
+import { loadBlock } from '../services/block-data.js';
 import { pageCache } from '../middleware/page-cache.js';
 import {
   btcParts, btc8, btc2, num,
@@ -218,41 +219,17 @@ router.get('/block/:n', async (req: Request, res: Response) => {
     const blockNum = parseInt(req.params['n']);
     if (isNaN(blockNum) || blockNum < 0) return renderError(res, 400, 'Invalid block number');
 
-    const { rows: blockRows } = await pool.query('SELECT * FROM blocks WHERE block_number = $1', [blockNum]);
-    if (!blockRows.length) return renderError(res, 404, `Block ${num(blockNum)} is not indexed`);
-    const block = blockRows[0];
-
-    // Transactional losses in this block (buckets 1+2 — bucket 4 is not a loss).
-    const { rows: lossUtxos } = await pool.query(`
-      SELECT tx_hash, output_index, value_sats, loss_rules
-      FROM utxos WHERE loss_bucket IN (1, 2) AND block_number = $1
-      ORDER BY value_sats DESC LIMIT 100
-    `, [blockNum]);
-    const { rows: txLossRows } = await pool.query(`
-      SELECT COALESCE(SUM(value_sats), 0) AS total FROM utxos
-      WHERE loss_bucket IN (1, 2) AND block_number = $1
-    `, [blockNum]);
-
-    // Pager: nearest block in either direction that removed coin.
-    const { rows: pagerRows } = await pool.query(`
-      SELECT
-        GREATEST(
-          (SELECT MAX(block_number) FROM utxos  WHERE loss_bucket IN (1, 2) AND block_number < $1),
-          (SELECT MAX(block_number) FROM blocks WHERE miner_loss_sats > 0   AND block_number < $1)
-        ) AS prev_loss,
-        LEAST(
-          (SELECT MIN(block_number) FROM utxos  WHERE loss_bucket IN (1, 2) AND block_number > $1),
-          (SELECT MIN(block_number) FROM blocks WHERE miner_loss_sats > 0   AND block_number > $1)
-        ) AS next_loss
-    `, [blockNum]);
-    const prevLoss = pagerRows[0].prev_loss != null ? Number(pagerRows[0].prev_loss) : null;
-    const nextLoss = pagerRows[0].next_loss != null ? Number(pagerRows[0].next_loss) : null;
+    const data = await loadBlock(blockNum);
+    if (!data) return renderError(res, 404, `Block ${num(blockNum)} is not indexed`);
+    const { block, lossOutputs: lossUtxos, pager } = data;
+    const prevLoss = pager.prev;
+    const nextLoss = pager.next;
 
     const subsidy = subsidyAt(blockNum);
     const allowed = BigInt(block.allowed_supply_sats ?? 0);
     const fees = allowed > subsidy ? allowed - subsidy : 0n;
     const minerLoss = BigInt(block.miner_loss_sats ?? 0);
-    const txLoss = BigInt(txLossRows[0].total);
+    const txLoss = BigInt(data.lossSats);
 
     const removed = minerLoss + txLoss;
     res.locals.meta.description = removed > 0n
@@ -462,7 +439,7 @@ router.get('/transaction/:hash', async (req: Request, res: Response) => {
     const txHash = req.params['hash'];
     let tx: any;
     try {
-      tx = await getRawTransaction(txHash);
+      tx = await getCachedRawTransaction(txHash);
     } catch {
       return renderError(res, 404, 'Transaction not found');
     }

@@ -3,6 +3,7 @@ import express from 'express';
 import path from 'path';
 import { connectRedis } from './services/redis.js';
 import { startBlockPoller } from './services/sse.js';
+import { localCache } from './services/local-cache.js';
 import apiRoutes from './routes/api.js';
 import pageRoutes from './routes/pages.js';
 import { config } from './config.js';
@@ -72,6 +73,7 @@ app.use('/api/v1', apiRoutes);
 app.use('/', pageRoutes);
 
 async function start() {
+  localCache.init();
   await connectRedis();
   await startBlockPoller();
   app.listen(config.server.port, config.server.host, () => {
