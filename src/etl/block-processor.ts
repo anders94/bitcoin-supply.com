@@ -2,6 +2,7 @@ import { upsertBlock } from '../db/blocks.js';
 import { insertUtxo, deleteUtxo, markAddressPubkeyExposed as markUtxosPubkey } from '../db/utxos.js';
 import { upsertAddressInfo, markAddressPubkeyExposed as markAddrPubkey, markAddressP2PKExposed } from '../db/address-info.js';
 import { classifyOutput, ClassifierInput } from '../classifiers/index.js';
+import { NumsMatcher, EMPTY_NUMS_MATCHER } from '../classifiers/nums.js';
 import { pool } from '../db/index.js';
 
 // Bitcoin block subsidy schedule
@@ -11,7 +12,11 @@ export function calculateSubsidy(blockNumber: number): bigint {
   return 5_000_000_000n >> BigInt(halvings); // 50 BTC in sats >> halvings
 }
 
-export async function processBlock(block: any, knownBurnAddresses: Set<string>): Promise<void> {
+export async function processBlock(
+  block: any,
+  knownBurnAddresses: Set<string>,
+  numsMatcher: NumsMatcher = EMPTY_NUMS_MATCHER
+): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -129,6 +134,7 @@ export async function processBlock(block: any, knownBurnAddresses: Set<string>):
           script_type: scriptType,
           address: address || undefined,
           knownBurnAddresses,
+          numsMatcher,
         };
 
         const { rules, bucket } = classifyOutput(ctx);

@@ -1,5 +1,6 @@
 import { getBlockHash, getBlock, getBlockCount } from '../services/bitcoin-rpc.js';
 import { processBlock } from './block-processor.js';
+import { loadNumsMatcher } from '../classifiers/nums.js';
 import { pool } from '../db/index.js';
 import { config } from '../config.js';
 
@@ -22,6 +23,7 @@ export async function setLastSyncedBlock(n: number): Promise<void> {
 
 export async function runHistoricalSync(startBlock?: number): Promise<void> {
   const knownBurnAddresses = await loadKnownBurnAddresses();
+  const numsMatcher = await loadNumsMatcher(pool);
   const lastSynced = startBlock ?? await getLastSyncedBlock();
   const tipBlock = await getBlockCount() - config.etl.confirmationLag;
 
@@ -57,7 +59,7 @@ export async function runHistoricalSync(startBlock?: number): Promise<void> {
 
     // Process sequentially (maintain UTXO consistency)
     for (const block of blocks) {
-      await processBlock(block, knownBurnAddresses);
+      await processBlock(block, knownBurnAddresses, numsMatcher);
       totalTxProcessed += block.tx.length;
 
       const now = Date.now();

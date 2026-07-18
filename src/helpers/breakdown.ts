@@ -18,6 +18,7 @@ export const RULE_CHIP_LABELS: Record<string, string> = {
   '013': 'OP_TRUE',
   '015': 'P2PK',
   '016': 'EXPOSED-PKH',
+  '018': 'NUMS-KEY',
 };
 
 // Long-form titles for the top-losses list.
@@ -35,6 +36,7 @@ export const RULE_TITLES: Record<string, string> = {
   '011': 'OP_VERIF abort opcode',
   '012': 'Burn address',
   '013': 'OP_TRUE anyone-can-spend',
+  '018': 'NUMS-key burn',
 };
 
 export interface BreakdownGroup {
@@ -54,11 +56,12 @@ export const BREAKDOWN_GROUPS: { provable: BreakdownGroup[]; probable: Breakdown
   probable: [
     { rules: ['012'], label: 'Known burn addresses' },
     { rules: ['013'], label: 'OP_TRUE dormant ≥ 3y' },
+    { rules: ['018'], label: 'NUMS-key burns' },
   ],
 };
 
 const PROVABLE_RULES = new Set(['000', '001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011']);
-const PROBABLE_RULES = new Set(['012', '013']);
+const PROBABLE_RULES = new Set(['012', '013', '018']);
 const QUANTUM_RULES = new Set(['015', '016']);
 
 export type RuleCategory = 'provable' | 'probable' | 'quantum' | 'other';

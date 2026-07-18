@@ -1,5 +1,6 @@
 import { getBlock, getBlockHash, getBlockCount } from '../services/bitcoin-rpc.js';
 import { processBlock } from './block-processor.js';
+import { loadNumsMatcher } from '../classifiers/nums.js';
 import { pool } from '../db/index.js';
 import { config } from '../config.js';
 import { getLastSyncedBlock, setLastSyncedBlock } from './historical-sync.js';
@@ -13,6 +14,7 @@ async function loadKnownBurnAddresses(): Promise<Set<string>> {
 
 export async function runLiveSync(): Promise<void> {
   const knownBurnAddresses = await loadKnownBurnAddresses();
+  const numsMatcher = await loadNumsMatcher(pool);
 
   while (true) {
     try {
@@ -35,7 +37,7 @@ export async function runLiveSync(): Promise<void> {
       for (let height = lastSynced + 1; height <= confirmedTip; height++) {
         const hash = await getBlockHash(height);
         const block = await getBlock(hash);
-        await processBlock(block, knownBurnAddresses);
+        await processBlock(block, knownBurnAddresses, numsMatcher);
         await setLastSyncedBlock(height);
 
         // No SSE publish here: the web server polls the tip itself (see

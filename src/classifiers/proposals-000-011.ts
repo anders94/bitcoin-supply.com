@@ -1,5 +1,7 @@
 // Ported verbatim from /home/anders/src/bitcoin-supply.com/detectors/index.js
 
+import type { NumsMatcher } from './nums.js';
+
 export interface ClassifierInput {
   block_number: number;
   block_timestamp: Date;
@@ -11,11 +13,12 @@ export interface ClassifierInput {
   script_type: string;
   address?: string;
   knownBurnAddresses: Set<string>;
+  numsMatcher: NumsMatcher;
 }
 
-const SECP256K1_P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn;
+export const SECP256K1_P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn;
 
-function modpow(base: bigint, exp: bigint, mod: bigint): bigint {
+export function modpow(base: bigint, exp: bigint, mod: bigint): bigint {
   let result = 1n;
   base = base % mod;
   while (exp > 0n) {
