@@ -30,17 +30,18 @@ block content
             span new coins
         else
           each vin in (tx.vin || [])
-            .row.row--dotted
+            .row.row--dotted.row--stack
               if vin.txid
                 a.hash-link(href=`/transaction/${vin.txid}`)
                   +ident(vin.txid, shortHash(vin.txid))
-                  |  : #{vin.vout}
-                if vin.prevout
-                  span(style='display:flex;gap:8px;align-items:baseline')
-                    if vin.prevout.scriptPubKey && vin.prevout.scriptPubKey.address
-                      a.hash-link(href=`/address/${vin.prevout.scriptPubKey.address}`)
-                        +ident(vin.prevout.scriptPubKey.address, shortAddress(vin.prevout.scriptPubKey.address))
-                    span= btc8(BigInt(Math.round(vin.prevout.value * 1e8)))
+                .row-sub
+                  span.k vout #{vin.vout}
+                  if vin.prevout
+                    span.row-sub-right
+                      if vin.prevout.scriptPubKey && vin.prevout.scriptPubKey.address
+                        a.hash-link(href=`/address/${vin.prevout.scriptPubKey.address}`)
+                          +ident(vin.prevout.scriptPubKey.address, shortAddress(vin.prevout.scriptPubKey.address))
+                      span= btc8(BigInt(Math.round(vin.prevout.value * 1e8)))
               else
                 span.k coinbase
 

@@ -621,12 +621,20 @@ main .wrap { padding: 18px 18px 16px; display: flex; flex-direction: column; gap
 /* ---------- transaction inputs/outputs ---------- */
 
 .tx-io { display: flex; flex-direction: column; gap: 16px; }
+/* Full 64-char identifiers in a half-width column: wrap rather than overflow. */
+.tx-io .hash-link { word-break: break-all; }
+.tx-io .row--stack { flex-direction: column; align-items: stretch; gap: 2px; }
+.tx-io .row-sub { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tx-io .row-sub-right {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
 @media (min-width: 860px) {
   .tx-io { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
-  /* Half-width columns can't fit 64-char identifiers plus amounts, so keep
-     the head…tail abbreviation here even where .ident-full normally wins. */
-  .tx-io .ident-full { display: none; }
-  .tx-io .ident-abbr { display: inline; }
 }
 
 /* ---------- error ---------- */
