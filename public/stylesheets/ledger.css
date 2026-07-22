@@ -618,6 +618,17 @@ main .wrap { padding: 18px 18px 16px; display: flex; flex-direction: column; gap
 
 .alert-inset { background: var(--inset); border: 1px solid var(--border); padding: 10px 12px; font-size: 11px; line-height: 1.5; color: var(--body); }
 
+/* ---------- transaction inputs/outputs ---------- */
+
+.tx-io { display: flex; flex-direction: column; gap: 16px; }
+@media (min-width: 860px) {
+  .tx-io { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+  /* Half-width columns can't fit 64-char identifiers plus amounts, so keep
+     the head…tail abbreviation here even where .ident-full normally wins. */
+  .tx-io .ident-full { display: none; }
+  .tx-io .ident-abbr { display: inline; }
+}
+
 /* ---------- error ---------- */
 
 .error-box { display: flex; flex-direction: column; gap: 8px; padding: 40px 0; align-items: flex-start; }

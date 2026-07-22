@@ -20,51 +20,52 @@ block content
       span.k size
       span #{tx.size || '—'} bytes
 
-  section.section.section--tight
-    span.label INPUTS
-    .rows(style='font-size:10px')
-      if tx.vin && tx.vin[0] && tx.vin[0].coinbase
-        .row.row--dotted
-          span.k coinbase
-          span new coins
-      else
-        each vin in (tx.vin || [])
+  .tx-io
+    section.section.section--tight
+      span.label INPUTS
+      .rows(style='font-size:10px')
+        if tx.vin && tx.vin[0] && tx.vin[0].coinbase
           .row.row--dotted
-            if vin.txid
-              a.hash-link(href=`/transaction/${vin.txid}`)
-                +ident(vin.txid, shortHash(vin.txid))
-                |  : #{vin.vout}
-              if vin.prevout
-                span(style='display:flex;gap:8px;align-items:baseline')
-                  if vin.prevout.scriptPubKey && vin.prevout.scriptPubKey.address
-                    a.hash-link(href=`/address/${vin.prevout.scriptPubKey.address}`)
-                      +ident(vin.prevout.scriptPubKey.address, shortAddress(vin.prevout.scriptPubKey.address))
-                  span= btc8(BigInt(Math.round(vin.prevout.value * 1e8)))
-            else
-              span.k coinbase
+            span.k coinbase
+            span new coins
+        else
+          each vin in (tx.vin || [])
+            .row.row--dotted
+              if vin.txid
+                a.hash-link(href=`/transaction/${vin.txid}`)
+                  +ident(vin.txid, shortHash(vin.txid))
+                  |  : #{vin.vout}
+                if vin.prevout
+                  span(style='display:flex;gap:8px;align-items:baseline')
+                    if vin.prevout.scriptPubKey && vin.prevout.scriptPubKey.address
+                      a.hash-link(href=`/address/${vin.prevout.scriptPubKey.address}`)
+                        +ident(vin.prevout.scriptPubKey.address, shortAddress(vin.prevout.scriptPubKey.address))
+                    span= btc8(BigInt(Math.round(vin.prevout.value * 1e8)))
+              else
+                span.k coinbase
 
-  section.section.section--tight
-    span.label OUTPUTS
-    .rows(style='font-size:10px')
-      each vout in (tx.vout || [])
-        - const classified = utxoMap[vout.n]
-        .row.row--dotted(style='flex-wrap:wrap')
-          span(style='display:flex;gap:8px;align-items:baseline;min-width:0')
-            span.k vout #{vout.n}
-            if vout.scriptPubKey && vout.scriptPubKey.address
-              a.hash-link(href=`/address/${vout.scriptPubKey.address}`)
-                +ident(vout.scriptPubKey.address, shortAddress(vout.scriptPubKey.address))
-            else
-              span.k= vout.scriptPubKey ? vout.scriptPubKey.type : 'unknown'
-            if classified
-              each rule in classified.loss_rules
-                a.chip(
-                  href=`/proposals/${rule}`
-                  class=ruleCategory(rule) === 'probable' ? 'chip--amber' : ruleCategory(rule) === 'quantum' ? 'chip--purple' : 'chip--red'
-                )= ruleChip(rule)
-              if classified.loss_bucket === 4 && !classified.loss_rules.length
-                span.chip.chip--purple QUANTUM
-          span(class=classified && classified.loss_bucket === 1 ? 'v--red' : classified && classified.loss_bucket === 2 ? 'v--red' : '')= btc8(BigInt(Math.round(vout.value * 1e8)))
-        if vout.scriptPubKey && vout.scriptPubKey.hex
-          .row(style='padding-top:0')
-            span.hash(style='font-size:8.5px;color:var(--faded)')= vout.scriptPubKey.hex
+    section.section.section--tight
+      span.label OUTPUTS
+      .rows(style='font-size:10px')
+        each vout in (tx.vout || [])
+          - const classified = utxoMap[vout.n]
+          .row.row--dotted(style='flex-wrap:wrap')
+            span(style='display:flex;gap:8px;align-items:baseline;min-width:0')
+              span.k vout #{vout.n}
+              if vout.scriptPubKey && vout.scriptPubKey.address
+                a.hash-link(href=`/address/${vout.scriptPubKey.address}`)
+                  +ident(vout.scriptPubKey.address, shortAddress(vout.scriptPubKey.address))
+              else
+                span.k= vout.scriptPubKey ? vout.scriptPubKey.type : 'unknown'
+              if classified
+                each rule in classified.loss_rules
+                  a.chip(
+                    href=`/proposals/${rule}`
+                    class=ruleCategory(rule) === 'probable' ? 'chip--amber' : ruleCategory(rule) === 'quantum' ? 'chip--purple' : 'chip--red'
+                  )= ruleChip(rule)
+                if classified.loss_bucket === 4 && !classified.loss_rules.length
+                  span.chip.chip--purple QUANTUM
+            span(class=classified && classified.loss_bucket === 1 ? 'v--red' : classified && classified.loss_bucket === 2 ? 'v--red' : '')= btc8(BigInt(Math.round(vout.value * 1e8)))
+          if vout.scriptPubKey && vout.scriptPubKey.hex
+            .row(style='padding-top:0')
+              span.hash(style='font-size:8.5px;color:var(--faded)')= vout.scriptPubKey.hex
