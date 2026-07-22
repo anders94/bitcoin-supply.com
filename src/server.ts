@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
 import { connectRedis } from './services/redis.js';
 import { startBlockPoller } from './services/sse.js';
@@ -16,6 +17,26 @@ app.set('views', path.join(process.cwd(), 'views'));
 // We sit behind nginx, so req.ip should come from X-Forwarded-For — but only
 // when the hop is trusted, or any client could forge its own address.
 app.set('trust proxy', config.server.trustProxy);
+
+// Cloudflare caches static assets at the edge for hours, so a deploy has to
+// change asset URLs or browsers keep applying stale CSS/JS to fresh HTML.
+// Newest mtime across the linked assets, base36; views append it as ?v=.
+const assetFiles = [
+  'public/stylesheets/ledger.css',
+  'public/javascripts/dist/header.js',
+  'public/javascripts/dist/home.css',
+  'public/javascripts/dist/home.js',
+  'public/javascripts/dist/utxos.js',
+];
+app.locals.assetV = Math.max(
+  ...assetFiles.map((f) => {
+    try {
+      return fs.statSync(path.join(process.cwd(), f)).mtimeMs;
+    } catch {
+      return 0;
+    }
+  }),
+).toString(36);
 
 // Fallback social-preview metadata so layout.pug can always render, even for
 // views reached outside the pages router (which sets res.locals.meta per page).

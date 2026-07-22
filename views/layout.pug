@@ -25,7 +25,7 @@ html(lang='en')
     link(rel='preconnect', href='https://fonts.googleapis.com')
     link(rel='preconnect', href='https://fonts.gstatic.com', crossorigin)
     link(rel='stylesheet', href='https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap')
-    link(rel='stylesheet', href='/stylesheets/ledger.css')
+    link(rel='stylesheet', href='/stylesheets/ledger.css?v=' + assetV)
     script(async, src='https://www.googletagmanager.com/gtag/js?id=G-QR2SXVYGER')
     script.
       window.dataLayer = window.dataLayer || [];
@@ -63,5 +63,5 @@ html(lang='en')
         a(href='/proposals') PROPOSALS
         span.spacer
         a.muted(href='/about') ABOUT
-    script(src='/javascripts/dist/header.js', defer)
+    script(src='/javascripts/dist/header.js?v=' + assetV, defer)
     block scripts

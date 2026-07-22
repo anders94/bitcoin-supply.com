@@ -1,7 +1,7 @@
 extends layout
 
 block styles
-  link(rel='stylesheet', href='/javascripts/dist/home.css')
+  link(rel='stylesheet', href='/javascripts/dist/home.css?v=' + assetV)
 
 block content
   //- hero
@@ -179,4 +179,4 @@ block content
 block scripts
   script.
     window.__SUPPLY__ = !{supplyJson};
-  script(src='/javascripts/dist/home.js', defer)
+  script(src='/javascripts/dist/home.js?v=' + assetV, defer)
