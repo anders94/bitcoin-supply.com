@@ -97,9 +97,18 @@ async function start() {
   localCache.init();
   await connectRedis();
   await startBlockPoller();
-  app.listen(config.server.port, config.server.host, () => {
+  const server = app.listen(config.server.port, config.server.host, () => {
     console.log(`Server listening on ${config.server.host}:${config.server.port}`);
   });
+
+  // nginx proxies with an upstream keepalive pool and holds idle connections
+  // for 60s. Node's default keepAliveTimeout is 5s, so it would close
+  // connections nginx still believes are good and is about to reuse — the
+  // request then fails on a dead socket. Outlive nginx's idle window instead.
+  // headersTimeout must exceed keepAliveTimeout: it bounds the same wait, so a
+  // smaller value would fire first and close the connection anyway.
+  server.keepAliveTimeout = 65_000;
+  server.headersTimeout = 66_000;
 }
 
 start().catch(console.error);
