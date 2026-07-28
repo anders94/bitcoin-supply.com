@@ -39,9 +39,17 @@ export const config = {
     // still rewrite it. Matches the ETL's confirmation lag: below tip-N the DB
     // itself treats a block as final.
     reorgDepth: parseInt(process.env.CACHE_REORG_DEPTH || '6'),
-    // Soft cap on cached transactions (~2.4 KB each). 8M ≈ 19 GB, under a 20 GB
-    // budget. Oldest are pruned past this.
-    maxTxRows: parseInt(process.env.CACHE_MAX_TX || '8000000'),
+    // Hard cap on the on-disk cache size. When the sqlite file grows past this,
+    // the oldest cached transactions are pruned (and their pages returned to the
+    // OS via incremental auto-vacuum) until it is back under budget. Sized on the
+    // real on-disk footprint rather than a row count: raw txs vary from a few
+    // hundred bytes to ~16 MB, so a row cap can't bound total size. Default 18
+    // GiB leaves headroom for the WAL under a 20 GB budget.
+    maxBytes: parseInt(process.env.CACHE_MAX_BYTES || String(18 * 1024 ** 3)),
+    // Don't cache a single raw tx larger than this (default 1 MiB). A handful of
+    // pathological multi-megabyte txs would otherwise dominate the cache while
+    // being rare enough that re-fetching them costs almost nothing.
+    maxTxBytes: parseInt(process.env.CACHE_MAX_TX_BYTES || String(1024 ** 2)),
   },
   redis: {
     host: process.env.REDISHOST || '127.0.0.1',

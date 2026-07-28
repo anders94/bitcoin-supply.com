@@ -29,5 +29,9 @@
     "esbuild": "^0.28.1",
     "tsx": "^4.23.1",
     "typescript": "^5.3.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "zeromq@6.5.0": true
   }
 }
