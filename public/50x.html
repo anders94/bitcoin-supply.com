@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Explorer unavailable · bitcoin-supply.com</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{
+    --paper:#E4E9EB; --card:#F5F7F8; --ink:#1A2226; --muted:#66757B;
+    --line:#C3CDD1; --amber:#A9631A; --good:#2E6A5C;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--paper:#131A1D;--card:#1B2327;--ink:#E6ECEE;--muted:#8B9AA1;
+          --line:#2E3A40;--amber:#E2A44E;--good:#5FAE99}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;
+       background:var(--paper);color:var(--ink);font-family:var(--sans);
+       -webkit-font-smoothing:antialiased}
+  main{width:100%;max-width:30rem}
+
+  /* signature: the chain, with your request orphaned off the end */
+  .chain{display:flex;align-items:center;gap:6px;height:44px;margin-bottom:28px}
+  .b{width:26px;height:26px;border:1px solid var(--line);border-radius:2px;
+     background:var(--card);flex:none}
+  .link{width:10px;height:1px;background:var(--line);flex:none}
+  .orphan{margin-left:14px;border-style:dashed;border-color:var(--muted);
+          background:transparent;transform:translateY(-13px);
+          transition:transform .5s cubic-bezier(.2,.7,.2,1),border-color .5s,background .5s}
+  .orphan.linked{transform:translateY(0);border-style:solid;
+                 border-color:var(--good);background:var(--good)}
+
+  .eyebrow{font:500 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;
+           color:var(--amber);margin:0 0 14px}
+  h1{font:500 clamp(23px,5.5vw,29px)/1.25 var(--mono);letter-spacing:-.02em;
+     margin:0 0 14px}
+  p{font-size:15px;line-height:1.6;color:var(--muted);margin:0 0 28px;max-width:34ch}
+
+  .actions{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  button{font:500 13px var(--sans);color:var(--paper);background:var(--ink);
+         border:0;border-radius:3px;padding:9px 15px;cursor:pointer}
+  button:hover{opacity:.85}
+  a{font-size:13px;color:var(--muted);text-decoration:none;
+    border-bottom:1px solid var(--line);padding-bottom:1px}
+  a:hover{color:var(--ink)}
+  :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+  #status{font:400 11px/1.4 var(--mono);letter-spacing:.05em;color:var(--muted);
+          margin:28px 0 0;padding-top:14px;border-top:1px solid var(--line)}
+  @media (prefers-reduced-motion:reduce){.orphan{transition:none}}
+</style>
+
+<main>
+  <div class="chain" aria-hidden="true">
+    <div class="b"></div><div class="link"></div>
+    <div class="b"></div><div class="link"></div>
+    <div class="b"></div><div class="link"></div>
+    <div class="b"></div>
+    <div class="b orphan" id="orphan"></div>
+  </div>
+
+  <p class="eyebrow">502 · bad gateway</p>
+  <h1>The explorer isn't responding.</h1>
+  <p>Your request never reached the index. Nothing on the network is affected — this server is.</p>
+
+  <div class="actions">
+    <button id="now">Check now</button>
+    <a href="/">Go to search</a>
+  </div>
+
+  <p id="status" role="status" aria-live="polite">Checking for the explorer…</p>
+</main>
+
+<script>
+(function(){
+  var PROBE = '/', MAX = 12;                 // swap PROBE for '/healthz' if you add one
+  var status = document.getElementById('status'),
+      orphan = document.getElementById('orphan'),
+      attempt = 0, ticker, waiter;
+
+  function clear(){ clearInterval(ticker); clearTimeout(waiter); }
+
+  function schedule(){
+    if (++attempt > MAX){
+      status.textContent = 'Stopped checking. Reload the page when you\u2019re ready.';
+      return;
+    }
+    // backoff + jitter so every open error page doesn't hit the app at once
+    var base = Math.min(30, Math.round(4 * Math.pow(1.6, attempt - 1))),
+        left = base + Math.floor(Math.random() * Math.max(2, base * 0.3));
+    ticker = setInterval(function(){
+      if (--left <= 0){ clearInterval(ticker); probe(); return; }
+      render(left);
+    }, 1000);
+    render(left);
+  }
+
+  function render(left){
+    status.textContent = 'Checking again in ' + left + 's · attempt ' + attempt + ' of ' + MAX;
+  }
+
+  function probe(){
+    status.textContent = 'Checking for the explorer…';
+    fetch(PROBE, {method:'HEAD', cache:'no-store'})
+      .then(function(r){ r.ok ? recover() : schedule(); })
+      .catch(schedule);
+  }
+
+  function recover(){
+    clear();
+    status.textContent = 'Back up. Loading your page…';
+    orphan.classList.add('linked');
+    setTimeout(function(){
+      // nginx keeps the original URL, so reload re-requests what they asked for
+      location.pathname === '/50x.html' ? location.assign('/') : location.reload();
+    }, 700);
+  }
+
+  document.getElementById('now').addEventListener('click', function(){
+    clear(); attempt = 0; probe();
+  });
+
+  schedule();
+})();
+</script>
