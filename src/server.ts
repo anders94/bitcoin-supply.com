@@ -14,6 +14,19 @@ const app = express();
 app.set('view engine', 'pug');
 app.set('views', path.join(process.cwd(), 'views'));
 
+// Express only enables this itself when NODE_ENV === 'production' (see
+// express/lib/application.js: `if (env === 'production') this.enable('view
+// cache')`), and it passes the flag straight through to Pug as `cache`. With it
+// off, every render re-reads and recompiles the template — for /address that is
+// address.pug plus layout.pug (extends) and mixins.pug (include), lexed, parsed,
+// codegen'd and handed to new Function() on each request. It measured as ~90% of
+// one core in userland at ~32 req/s, and the throwaway functions add GC pressure
+// on top.
+//
+// Set explicitly rather than left to NODE_ENV: an unset variable silently
+// multiplying per-request CPU is how this got missed in the first place.
+app.set('view cache', true);
+
 // We sit behind nginx, so req.ip should come from X-Forwarded-For — but only
 // when the hop is trusted, or any client could forge its own address.
 app.set('trust proxy', config.server.trustProxy);
@@ -51,11 +64,25 @@ app.locals.meta = {
     'from full-chain analysis.',
 };
 
-// Client address for the log: req.ip resolves X-Forwarded-For per the trust
-// proxy setting above, falling back to the socket peer. Node reports IPv4 peers
-// on a dual-stack socket as ::ffff:1.2.3.4 — log the plain IPv4 form.
+// Client address for the log. Prefer Cloudflare's CF-Connecting-IP, which holds
+// the true client: req.ip can't reach it, because `trust proxy` is 'loopback'
+// and so resolves only as far as the nginx hop, leaving the Cloudflare edge
+// address. That made the log useless for identifying abuse — one scraper walking
+// the deep routes showed up as 237 distinct edge IPs, none of them the client.
+//
+// Trusting a client-settable header is only safe because nginx restricts this
+// vhost to Cloudflare's ranges (the `deny all` after the allow-list in
+// nginx.conf), so nothing else can reach the origin to forge it. If that
+// allow-list is ever loosened, this has to go back to req.ip.
+//
+// Falls back to req.ip, then the socket peer. Node reports IPv4 peers on a
+// dual-stack socket as ::ffff:1.2.3.4 — log the plain IPv4 form.
 function clientIp(req: express.Request): string {
-  const ip = req.ip || req.socket.remoteAddress || '-';
+  // Cloudflare sends exactly one address, no list. Anything containing
+  // whitespace did not come from Cloudflare and would break the field layout of
+  // the log line below, so it is ignored rather than logged.
+  const cf = req.get('cf-connecting-ip');
+  const ip = (cf && !/\s/.test(cf) && cf) || req.ip || req.socket.remoteAddress || '-';
   return ip.startsWith('::ffff:') ? ip.slice(7) : ip;
 }
 

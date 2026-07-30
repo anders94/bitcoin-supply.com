@@ -65,6 +65,24 @@ function renderError(res: Response, code: number, message: string) {
   return res.status(code).render('error', { title: 'Error', message, code, ...viewHelpers });
 }
 
+// Edge cache headers for the deep routes (/block/:n, /transaction/:hash,
+// /address/:addr). These deliberately do NOT go through middleware/page-cache.ts
+// — read the whitelist warning there: Redis runs noeviction, so an unbounded
+// keyspace would break writes. Cloudflare's cache has no such failure mode, so
+// the deep routes get an edge TTL and no Redis key.
+//
+// s-maxage carries the real TTL because only the shared cache should hold these
+// for minutes; max-age stays short so a browser doesn't pin a stale balance in
+// history. Set on 200s only — renderError paths stay uncached, or a 404 for an
+// address funded next week would outlive the funding.
+//
+// Note this buys little against a scraper walking distinct URLs (hit rate ~0);
+// it is here for repeat crawls and real readers, not as a load shield.
+function cacheFor(res: Response, sMaxAge: number): void {
+  res.set('Cache-Control',
+    `public, max-age=60, s-maxage=${sMaxAge}, stale-while-revalidate=3600`);
+}
+
 // Linear interpolation over an ascending table of [x, y] pairs (shared shape
 // with the client-side port in public/javascripts/lib/interp.ts).
 function interp(tbl: [number, number][], x: number): number {
@@ -240,6 +258,12 @@ router.get('/block/:n', async (req: Request, res: Response) => {
       : `Block ${num(blockNum)} (${dateUtc(block.block_timestamp)}): ` +
         `${btc8(subsidy)} BTC subsidy, ${btc8(fees)} BTC in fees, no coins lost. ` +
         'Supply accounting on bitcoin-supply.';
+
+    // A deep block is frozen, but one near the indexed frontier is not: pager.next
+    // is the *next* loss block, so it keeps changing as the ETL indexes further.
+    // 100 blocks is ~16h — well past any pager churn or reorg of the 6-block lag.
+    const tipHeight = Number(res.locals.tip?.height ?? 0);
+    cacheFor(res, tipHeight - blockNum > 100 ? 86_400 : 300);
 
     res.render('block', {
       title: `Block ${num(blockNum)}`,
@@ -461,6 +485,11 @@ router.get('/transaction/:hash', async (req: Request, res: Response) => {
         : '.') +
       ' Output-level supply accounting on bitcoin-supply.';
 
+    // The transaction is immutable once confirmed, but this page joins utxos —
+    // those rows change when an output is spent or the ETL reclassifies
+    // loss_bucket. Tied to the ~10min block cadence rather than the tx itself.
+    cacheFor(res, 600);
+
     res.render('transaction', {
       title: `Transaction ${txHash.slice(0, 16)}…`,
       tx,
@@ -501,6 +530,10 @@ router.get('/address/:addr', async (req: Request, res: Response) => {
         ? ' — public key exposed, making this balance quantum-vulnerable.'
         : '.') +
       ' Supply status on bitcoin-supply.';
+
+    // The most volatile of the three: any receive or spend changes the balance,
+    // so this stays under the block cadence rather than at it.
+    cacheFor(res, 300);
 
     res.render('address', {
       title: `Address ${addr.slice(0, 20)}…`,
