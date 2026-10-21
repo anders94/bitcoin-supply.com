@@ -22,6 +22,7 @@ nohup.out
 log/
 supervise/
 run
+env/
 
 # OG card generator font cache (fetched on first run)
 scripts/.fonts/
