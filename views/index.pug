@@ -148,8 +148,8 @@ block content
           .row.row--dotted
             span.k effective supply after attack
             span#q-effafter= ssr.q.effAfter
-        .note P2PK #{btc8(supply.quantum.p2pk_sats)} · EXPOSED P2PKH #{btc8(supply.quantum.exposed_pkh_sats)} · TOTAL #{btc8(supply.quantum.total_sats)}
-        .note--italic A different cut through the same outputs — never added to the loss total. #[a(href='/quantum', style='color:var(--secondary)') Full quantum explorer →]
+        .note KEY IN SCRIPT (P2PK · P2TR · P2MS) #{btc8(BigInt(supply.quantum.p2pk_sats) + BigInt(supply.quantum.p2tr_sats) + BigInt(supply.quantum.p2ms_sats))} · KEY REVEALED BY A SPEND (P2PKH · P2WPKH · P2SH · P2WSH) #{btc8(BigInt(supply.quantum.exposed_pkh_sats) + BigInt(supply.quantum.exposed_script_sats))} · TOTAL #{btc8(supply.quantum.total_sats)}
+        .note--italic A different cut through the same outputs — never added to the loss total. #[a(href='/quantum', style='color:var(--secondary)') Full breakdown and what counts →]
 
       //- recent losses
       section.section.panel.section--tight

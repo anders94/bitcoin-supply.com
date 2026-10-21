@@ -38,7 +38,7 @@ The interface presents a spectrum from **everything out of circulation** (absurd
 | 0 | Unclassified (normal UTXO) |
 | 1 | Provably lost (mathematically unspendable) |
 | 2 | Probably lost (known burn addresses, OP_TRUE ACS) |
-| 4 | Quantum-tagged (valid P2PK or exposed-pubkey P2PKH — not lost, but at risk) |
+| 4 | Quantum-tagged (key visible on-chain: P2PK / P2TR / P2MS outputs, or an address whose spend revealed its key or script — not lost, but at risk) |
 | *(3)* | Dormant — never stored; computed at query time via `block_timestamp <= cutoff` |
 
 ---
@@ -155,18 +155,16 @@ Serves on port 3000 (configurable via `PORT` env var).
 
 For each block (`getblock(hash, 3)`):
 
-1. **Inputs first** — delete the spent UTXO rows, detect pubkey exposure from `scriptSig.asm` (P2PKH) or `txinwitness[1]` (P2WPKH). When a pubkey is revealed, retroactively mark all remaining UTXOs of that address as `pubkey_exposed = TRUE`.
-2. **Outputs second** — classify each output through the classifier pipeline, insert as a new UTXO row.
+1. **Inputs first** — delete the spent UTXO rows, and detect key exposure by prevout type (`src/classifiers/exposure.ts`): the key itself for P2PKH / P2WPKH / P2SH-P2WPKH, the revealed redeem or witness script and every key in it for P2SH / P2WSH / P2SH-P2WSH. When keys are revealed, retroactively mark all remaining UTXOs of that address as `pubkey_exposed = TRUE`.
+2. **Outputs second** — classify each output through the classifier pipeline, insert as a new UTXO row. An output whose script carries its key (P2PK, P2TR, bare multisig) is inserted already exposed; an output received at an address whose keys are already on-chain is flagged on insert.
 
-Processing inputs before outputs in each block maintains UTXO set consistency even when a transaction spends and creates outputs to the same address.
+Processing inputs before outputs in each transaction maintains UTXO set consistency even when a transaction spends and creates outputs to the same address.
 
 ### Pubkey exposure
 
-When a P2PKH or P2WPKH output is spent, the pubkey is revealed in the scriptSig or witness. The ETL:
-- Updates `address_info.pubkey_hex` and `pubkey_exposed_at_block`
-- Updates all remaining UTXOs for that address: `pubkey_exposed = TRUE`
+`address_info` records how an address's keys became public (`exposure_kind`: `p2pk`, `p2tr`, `p2ms`, `pkh`, `script`, `script-mixed`), the key(s) (`pubkey_hex`, comma-joined for scripts) and the block of first exposure. Every UTXO at an exposed address carries `pubkey_exposed = TRUE`, whether it was there at the revealing spend or arrived later — a key stays public forever. Provably-lost outputs (bucket 1) are never flagged: an off-curve key has no private key to derive.
 
-This means the quantum slider accurately reflects the current exposure state, not just the creation-time state.
+The quantum slider therefore reflects the current exposure state, not the creation-time state. `scripts/backfill-quantum-exposure.ts` brings an existing database up to these rules (see `docs/quantum-exposure-plan.md`).
 
 ---
 
@@ -192,8 +190,12 @@ Each output is run through the full classifier pipeline. Results are aggregated 
 | 013 | Probably Lost | OP_TRUE (anyone-can-spend) outputs dormant 3+ years |
 | 014 | *(Methodology)* | Dormancy methodology — no ETL detection, computed at query time |
 | 015 | Quantum | Valid P2PK output (pubkey in script, always exposed) |
-| 016 | Quantum | P2PKH/P2WPKH where a prior spend has revealed the pubkey |
+| 016 | Quantum | P2PKH/P2WPKH (incl. P2SH-P2WPKH) where a prior spend has revealed the pubkey |
 | 017 | *(Research)* | Satoshi-era (Patoshi-pattern) coinbases — optional toggle |
+| 018 | Probably Lost | Outputs paying to a documented NUMS key |
+| 019 | Quantum | Taproot output (output key in script, always exposed) |
+| 020 | Quantum | Bare multisig with ≥ M valid keys (keys in script, always exposed) |
+| 021 | Quantum | P2SH/P2WSH where a prior spend has revealed the script and its keys |
 
 The secp256k1 math (on-curve checks, multisig parsing, abort opcode detection) is ported verbatim from the original `detectors/index.js` with no logic changes.
 
@@ -209,7 +211,7 @@ All endpoints served under `/api/v1/`.
 | `GET /loss-spectrum` | 5min | Slider query — total sats out-of-circulation at given threshold |
 | `GET /dormancy-curve` | 10min | Pre-computed breakpoints for dormancy slider (1–20 years) |
 | `GET /loss-breakdown` | 5min | Per-proposal totals from `unnest(loss_rules)` |
-| `GET /quantum` | 5min | P2PK totals, exposed-PKH totals, top addresses |
+| `GET /quantum` | 5min | Exposure totals by kind (P2PK, P2TR, P2MS, revealed key, revealed script), addresses by kind, top addresses |
 | `GET /quantum-curve` | 10min | Cumulative curve sorted by value DESC (for quantum slider) |
 | `GET /concentration` | 5min | Top addresses by total UTXO value |
 | `GET /events` | — | SSE stream — live block events |

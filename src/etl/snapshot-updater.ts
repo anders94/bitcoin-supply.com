@@ -17,6 +17,7 @@ const CURVE_FRACTIONS = [
 interface GroupRow {
   loss_bucket: number;
   pubkey_exposed: boolean;
+  script_type: string | null;
   value_band: number; // 0: >=100 BTC, 1: 1-100, 2: 0.01-1, 3: <0.01
   age_years: number;  // full years since creation, clamped to [0, 25]
   total_sats: string;
@@ -52,6 +53,7 @@ export async function updateSnapshots(): Promise<void> {
   await stage('top losses', () => topLosses(tipBlock, breakdown));
   await stage('halvings', () => halvings(tipBlock, tipTs));
   await stage('dormant giants', () => dormantGiants(tipBlock, tipTs));
+  await stage('project eleven cross-check', () => projectElevenCrosscheck(tipBlock));
 
   console.log(`Snapshots updated at block ${tipBlock}`);
 }
@@ -61,6 +63,7 @@ export async function updateSnapshots(): Promise<void> {
 async function supplyScan(tipBlock: number, tipTs: Date): Promise<void> {
   const { rows } = await pool.query<GroupRow>(`
     SELECT loss_bucket, pubkey_exposed,
+           CASE WHEN pubkey_exposed THEN script_type END AS script_type,
            CASE WHEN value_sats >= 10000000000 THEN 0
                 WHEN value_sats >= 100000000   THEN 1
                 WHEN value_sats >= 1000000     THEN 2
@@ -69,7 +72,7 @@ async function supplyScan(tipBlock: number, tipTs: Date): Promise<void> {
            SUM(value_sats)::text AS total_sats,
            COUNT(*)::text AS utxo_count
     FROM utxos
-    GROUP BY 1, 2, 3, 4
+    GROUP BY 1, 2, 3, 4, 5
   `, [tipTs]);
 
   const zero = () => ({ sats: 0n, count: 0n });
@@ -81,8 +84,14 @@ async function supplyScan(tipBlock: number, tipTs: Date): Promise<void> {
   const all = zero();
   const provable = zero();
   const probable = zero();
+  // Quantum lens, split by how the key became public (see Proposals 015, 016,
+  // 019, 020, 021). Provably-lost rows are excluded: there is no key to break.
   const p2pk = zero();
-  const exposed = zero();
+  const p2tr = zero();
+  const p2ms = zero();
+  const exposedPkh = zero();     // P2PKH / P2WPKH, key revealed by a spend
+  const exposedScript = zero();  // P2SH / P2WSH, keys revealed by a script spend
+  const exposed = zero();        // everything above
   const dormant = DORMANCY_YEARS.map(() => zero());
   // matrix[value_band][age_band], age bands: <1y / 1-5y / 5-10y / >=10y
   const matrixSats = Array.from({ length: 4 }, () => [0n, 0n, 0n, 0n]);
@@ -92,8 +101,16 @@ async function supplyScan(tipBlock: number, tipTs: Date): Promise<void> {
     add(all, row);
     if (row.loss_bucket === 1) add(provable, row);
     if (row.loss_bucket === 1 || row.loss_bucket === 2) add(probable, row);
-    if (row.loss_bucket === 4) add(p2pk, row);
-    if (row.pubkey_exposed) add(exposed, row);
+    if (row.pubkey_exposed && row.loss_bucket !== 1) {
+      add(exposed, row);
+      switch (row.script_type) {
+        case 'pubkey': add(p2pk, row); break;
+        case 'witness_v1_taproot': add(p2tr, row); break;
+        case 'multisig': add(p2ms, row); break;
+        case 'pubkeyhash': case 'witness_v0_keyhash': add(exposedPkh, row); break;
+        case 'scripthash': case 'witness_v0_scripthash': add(exposedScript, row); break;
+      }
+    }
     if (row.loss_bucket === 0 || row.loss_bucket === 4) {
       DORMANCY_YEARS.forEach((years, i) => {
         if (row.age_years >= years) add(dormant[i], row);
@@ -109,6 +126,10 @@ async function supplyScan(tipBlock: number, tipTs: Date): Promise<void> {
     ['provably_lost', provable],
     ['probably_lost', probable],
     ['quantum_p2pk', p2pk],
+    ['quantum_p2tr', p2tr],
+    ['quantum_p2ms', p2ms],
+    ['quantum_exposed_pkh', exposedPkh],
+    ['quantum_exposed_script', exposedScript],
     ['quantum_all_exposed', exposed],
     ...DORMANCY_YEARS.map((years, i) => [`dormant_${years}y`, dormant[i]] as [string, { sats: bigint; count: bigint }]),
   ];
@@ -158,7 +179,7 @@ async function ruleBreakdown(tipBlock: number, out: { rules: any[]; miner_loss: 
 // Breakpoints are cumulative-capture caps at fractions of the exposed total.
 async function quantumCurve(tipBlock: number): Promise<void> {
   const { rows: totalRows } = await pool.query(
-    `SELECT COALESCE(SUM(value_sats), 0)::text AS total FROM utxos WHERE pubkey_exposed = TRUE`
+    `SELECT COALESCE(SUM(value_sats), 0)::text AS total FROM utxos WHERE pubkey_exposed = TRUE AND loss_bucket <> 1`
   );
   const total = BigInt(totalRows[0].total);
   if (total === 0n) {
@@ -178,7 +199,7 @@ async function quantumCurve(tipBlock: number): Promise<void> {
     WITH ranked AS (
       SELECT address, value_sats,
              SUM(value_sats) OVER (ORDER BY value_sats DESC) AS cumulative
-      FROM utxos WHERE pubkey_exposed = TRUE
+      FROM utxos WHERE pubkey_exposed = TRUE AND loss_bucket <> 1
     )
     SELECT ${aggs},
       COUNT(*) AS utxo_count_max,
@@ -190,7 +211,9 @@ async function quantumCurve(tipBlock: number): Promise<void> {
   `);
 
   const r = rows[0];
-  // "Keys broken" counts one key per address plus one per addressless output (P2PK).
+  // "Keys broken" counts one key per address plus one per addressless output
+  // (P2PK, bare multisig). A multisig script needs several keys and a P2TR
+  // address only one, so this is a count of break events, not of keys.
   const point = (suffix: string | number) => ({
     cum_sats: (r[`total_sats_${suffix}`] ?? '0').toString(),
     utxo_count: r[`utxo_count_${suffix}`].toString(),
@@ -367,8 +390,50 @@ async function dormantGiants(tipBlock: number, tipTs: Date): Promise<void> {
     age_years: Math.floor(
       (tipTs.getTime() - new Date(r.block_timestamp).getTime()) / (YEAR_SECONDS * 1000)
     ),
-    chip: r.script_type === 'pubkey' ? 'P2PK' : r.pubkey_exposed ? 'Q-EXPOSED' : 'HASHED',
+    chip: r.script_type === 'pubkey' ? 'P2PK'
+      : r.script_type === 'witness_v1_taproot' ? 'P2TR'
+      : r.script_type === 'multisig' ? 'P2MS'
+      : r.pubkey_exposed ? 'Q-EXPOSED' : 'HASHED',
   }));
 
   await upsertComputedStat('dormant_giants', { giants }, tipBlock);
+}
+
+// Project Eleven publishes its Bitcoin Risq List totals per block at a public
+// endpoint. Keeping their latest figure next to ours on /quantum makes any
+// divergence visible without a manual check. Best effort: on any failure the
+// previously stored value stands and the stage logs FAILED.
+const P11_METRICS_URL = 'https://bitcoin-risq-list.projecteleven.com/api/btc-at-risk/metrics';
+
+async function projectElevenCrosscheck(tipBlock: number): Promise<void> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15_000);
+  try {
+    const res = await fetch(P11_METRICS_URL, { signal: ctrl.signal, headers: { accept: 'application/json' } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body: any = await res.json();
+    const blocks: any[] = Array.isArray(body?.blocks) ? body.blocks : [];
+    if (!blocks.length) throw new Error('no block entries in response');
+    const latest = blocks.reduce((a, b) => (Number(b.block_height) > Number(a.block_height) ? b : a));
+    const btc = (v: any) => Math.round(Number(v ?? 0) * 1e8).toString(); // sats as string, like our snapshots
+    await upsertComputedStat('p11_crosscheck', {
+      source: P11_METRICS_URL,
+      block_height: Number(latest.block_height),
+      total_sats: btc(latest.total_btc),
+      total_addresses: Number(latest.total_addresses ?? 0),
+      p2pk_sats: btc(latest.total_btc_due_to_p2pk_script_type),
+      p2tr_sats: btc(latest.total_btc_due_to_taproot_script_type),
+      p2ms_sats: btc(latest.total_btc_due_to_multisig_script_type),
+      pkh_reuse_sats: btc(
+        Number(latest.total_btc_due_to_pubkeyhash_reuse ?? 0) + Number(latest.total_btc_due_to_witness_v0_keyhash_reuse ?? 0)
+      ),
+      script_reuse_sats: btc(
+        Number(latest.total_btc_due_to_scripthash_reuse ?? 0) + Number(latest.total_btc_due_to_witness_v0_scripthash_reuse ?? 0)
+      ),
+      their_computed_at: latest.created_at ?? null,
+      fetched_at: new Date().toISOString(),
+    }, tipBlock);
+  } finally {
+    clearTimeout(timer);
+  }
 }

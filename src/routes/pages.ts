@@ -16,6 +16,7 @@ import {
 } from '../helpers/format.js';
 import {
   RULE_CHIP_LABELS, BREAKDOWN_GROUPS, ruleCategory, CATEGORY_CHIP_CLASS, safeJson,
+  EXPOSURE_KIND_CHIP, EXPOSURE_KIND_TEXT,
 } from '../helpers/breakdown.js';
 
 const router = Router();
@@ -119,7 +120,15 @@ router.get('/', async (req: Request, res: Response) => {
     const provable = snap('provably_lost');
     const probable = snap('probably_lost');
     const p2pk = snap('quantum_p2pk');
+    const p2tr = snap('quantum_p2tr');
+    const p2ms = snap('quantum_p2ms');
+    const exposedScript = snap('quantum_exposed_script');
     const exposed = snap('quantum_all_exposed');
+    // Until the first snapshot after the 019/020/021 deploy, the split keys are
+    // absent and everything that isn't P2PK is a revealed P2PKH/P2WPKH key.
+    const exposedPkh = snapshots['quantum_exposed_pkh']
+      ? snap('quantum_exposed_pkh')
+      : { sats: (BigInt(exposed.sats) - BigInt(p2pk.sats)).toString(), count: '0' };
 
     const breakdownRules: any[] = stats['rule_breakdown']?.data?.rules ?? [];
     const ruleTotal = (rules: string[], field: 'total_sats' | 'utxo_count') =>
@@ -155,7 +164,10 @@ router.get('/', async (req: Request, res: Response) => {
       breakdown,
       quantum: {
         p2pk_sats: p2pk.sats,
-        exposed_pkh_sats: (BigInt(exposed.sats) - BigInt(p2pk.sats)).toString(),
+        p2tr_sats: p2tr.sats,
+        p2ms_sats: p2ms.sats,
+        exposed_pkh_sats: exposedPkh.sats,
+        exposed_script_sats: exposedScript.sats,
         total_sats: exposed.sats,
         total_keys: totalKeys,
         curve: curve.map(bp => ({
@@ -523,11 +535,16 @@ router.get('/address/:addr', async (req: Request, res: Response) => {
       : utxos.reduce((sum: bigint, u: any) => sum + BigInt(u.value_sats), 0n);
 
     const totalUtxos = addrInfo ? Number(addrInfo.utxo_count) : utxos.length;
+    // Legacy rows (pre-migration 008) carry no kind; the old ETL could only
+    // produce P2PK or a revealed P2PKH/P2WPKH key.
+    const exposureKind: string | null = addrInfo?.pubkey_exposed
+      ? (addrInfo.exposure_kind ?? (addrInfo.is_p2pk ? 'p2pk' : 'pkh'))
+      : null;
     res.locals.meta.description =
       `Bitcoin address ${shortAddress(addr)}: ${btc8(totalBalance)} BTC unspent across ` +
       `${num(totalUtxos)} UTXO${totalUtxos === 1 ? '' : 's'}` +
-      (addrInfo?.pubkey_hex != null
-        ? ' — public key exposed, making this balance quantum-vulnerable.'
+      (exposureKind
+        ? ' — public key exposed on-chain, making this balance quantum-vulnerable.'
         : '.') +
       ' Supply status on bitcoin-supply.';
 
@@ -542,7 +559,10 @@ router.get('/address/:addr', async (req: Request, res: Response) => {
       utxos,
       totalUtxos,
       totalBalance: totalBalance.toString(),
-      isQuantumVulnerable: addrInfo?.pubkey_hex != null,
+      isQuantumVulnerable: exposureKind != null,
+      exposureKind,
+      exposureChip: exposureKind ? EXPOSURE_KIND_CHIP[exposureKind] ?? 'Q-EXPOSED' : null,
+      exposureText: exposureKind ? EXPOSURE_KIND_TEXT[exposureKind] ?? EXPOSURE_KIND_TEXT['pkh'] : null,
       ...viewHelpers,
     });
   } catch (err) {
@@ -555,28 +575,50 @@ router.get('/address/:addr', async (req: Request, res: Response) => {
 router.get('/quantum', async (req: Request, res: Response) => {
   try {
     const snapshots = await getAllSnapshots();
-    const { rows: topExposed } = await pool.query(`
-      SELECT address, utxo_value_sats AS balance, utxo_count,
-             pubkey_exposed_at_block, is_p2pk
+    const stats = await getComputedStats(['p11_crosscheck']);
+    const { rows: topRows } = await pool.query(`
+      SELECT address, utxo_value_sats AS balance, utxo_count, pubkey_exposed_at_block,
+             COALESCE(exposure_kind, CASE WHEN is_p2pk THEN 'p2pk' ELSE 'pkh' END) AS exposure_kind
       FROM address_info
       WHERE pubkey_exposed = TRUE AND utxo_count > 0
       ORDER BY utxo_value_sats DESC LIMIT 100
     `);
+    const topExposed = topRows.map(r => ({
+      ...r, chip: EXPOSURE_KIND_CHIP[r.exposure_kind] ?? 'Q-EXPOSED',
+    }));
 
-    const exposedSats = (snapshots['quantum_all_exposed']?.total_sats ?? 0n).toString();
-    const p2pkSats = (snapshots['quantum_p2pk']?.total_sats ?? 0n).toString();
+    // Mixed-script balances (keys revealed, but a hash-preimage branch exists)
+    // are inside the script total; surfaced so the caveat is quantifiable.
+    const { rows: mixedRows } = await pool.query(`
+      SELECT COALESCE(SUM(utxo_value_sats), 0)::text AS sats, COUNT(*)::text AS addrs
+      FROM address_info WHERE exposure_kind = 'script-mixed' AND utxo_count > 0
+    `);
+
+    const snapOf = (key: string) => ({
+      sats: (snapshots[key]?.total_sats ?? 0n).toString(),
+      count: (snapshots[key]?.utxo_count ?? 0n).toString(),
+      present: snapshots[key] != null,
+    });
+    const all = snapOf('quantum_all_exposed');
+    const p2pk = snapOf('quantum_p2pk');
+    const p2tr = snapOf('quantum_p2tr');
+    const p2ms = snapOf('quantum_p2ms');
+    const script = snapOf('quantum_exposed_script');
+    const pkh = snapshots['quantum_exposed_pkh']
+      ? snapOf('quantum_exposed_pkh')
+      : { sats: (BigInt(all.sats) - BigInt(p2pk.sats)).toString(), count: '0', present: false };
+
     res.locals.meta.description =
-      `${btc2(exposedSats)} BTC sits in addresses whose public keys are already ` +
-      `exposed on-chain — including ${btc2(p2pkSats)} BTC in early pay-to-pubkey ` +
-      'outputs. Explore what a quantum attacker could reach, key by key.';
+      `${btc2(all.sats)} BTC sits in outputs whose public keys are already visible ` +
+      `on-chain — P2PK, taproot and bare multisig outputs, plus every address that ` +
+      'has revealed its key or script in a spend. Explore what a quantum attacker could reach, key by key.';
 
     res.render('quantum', {
       title: 'Quantum exposure',
-      p2pkSats,
-      p2pkCount: (snapshots['quantum_p2pk']?.utxo_count ?? 0n).toString(),
-      exposedSats,
-      exposedCount: (snapshots['quantum_all_exposed']?.utxo_count ?? 0n).toString(),
+      all, p2pk, p2tr, p2ms, pkh, script,
+      mixed: { sats: mixedRows[0]?.sats ?? '0', addrs: mixedRows[0]?.addrs ?? '0' },
       topExposed,
+      crosscheck: stats['p11_crosscheck']?.data ?? null,
       ...viewHelpers,
     });
   } catch (err) {

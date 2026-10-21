@@ -1,8 +1,9 @@
 import { upsertBlock } from '../db/blocks.js';
-import { insertUtxo, deleteUtxo, markAddressPubkeyExposed as markUtxosPubkey } from '../db/utxos.js';
-import { upsertAddressInfo, markAddressPubkeyExposed as markAddrPubkey, markAddressP2PKExposed } from '../db/address-info.js';
+import { insertUtxo, deleteUtxo, markAddressPubkeyExposed as markUtxosPubkey, flagUtxoExposed } from '../db/utxos.js';
+import { upsertAddressInfo, markAddressPubkeyExposed as markAddrPubkey, markAddressKeyInScript } from '../db/address-info.js';
 import { classifyOutput, ClassifierInput } from '../classifiers/index.js';
 import { NumsMatcher, EMPTY_NUMS_MATCHER } from '../classifiers/nums.js';
+import { exposedKeysInOutput, revealedKeysFromInput, exposureRule, Exposure } from '../classifiers/exposure.js';
 import { pool } from '../db/index.js';
 
 // Bitcoin block subsidy schedule
@@ -63,8 +64,8 @@ export async function processBlock(
       miner_loss_sats: minerLoss,
     });
 
-    // Track addresses whose pubkeys are exposed this block (process each address only once)
-    const exposedThisBlock = new Map<string, string>(); // address -> pubkeyHex
+    // Addresses whose keys a transaction's inputs reveal (each address once per tx)
+    const exposedThisBlock = new Map<string, Exposure>();
 
     // Second pass: process transactions
     for (const tx of block.tx) {
@@ -90,21 +91,24 @@ export async function processBlock(
             }
           }
 
-          // Detect pubkey exposure
-          const pubkey = extractPubkeyFromInput(vin);
-          if (pubkey && vin.prevout?.scriptPubKey?.address) {
+          // Detect key exposure: P2PKH / P2WPKH reveal the key (016); P2SH /
+          // P2WSH reveal the script and every key in it (021).
+          const revealed = revealedKeysFromInput(vin);
+          if (revealed && vin.prevout?.scriptPubKey?.address) {
             const addr = vin.prevout.scriptPubKey.address;
             if (!exposedThisBlock.has(addr)) {
-              exposedThisBlock.set(addr, pubkey);
+              exposedThisBlock.set(addr, revealed);
             }
           }
         }
       }
 
-      // Apply pubkey exposure updates for this block
-      for (const [addr, pubkey] of exposedThisBlock) {
-        await markAddrPubkey(client, addr, pubkey, blockNumber);
-        await markUtxosPubkey(client, addr, pubkey);
+      // Apply exposure before this tx's outputs are inserted, so change sent
+      // back to a just-exposed address is flagged by the receipt path below.
+      for (const [addr, exp] of exposedThisBlock) {
+        const keys = exp.keys.join(',');
+        await markAddrPubkey(client, addr, keys, blockNumber, exp.kind);
+        await markUtxosPubkey(client, addr, keys, exposureRule(exp.kind));
       }
       exposedThisBlock.clear();
 
@@ -139,8 +143,13 @@ export async function processBlock(
 
         const { rules, bucket } = classifyOutput(ctx);
 
-        // P2PK outputs have the pubkey in the script itself
-        const p2pkPubkey = extractP2PKPubkey(scriptHex);
+        // Keys in the output script itself (015 P2PK, 019 P2TR, 020 P2MS) are
+        // exposed from creation. The rule set already enforces on-curve, so an
+        // off-curve "key" (provably lost, no private key exists) is never
+        // flagged — the old ETL flagged every P2PK shape regardless.
+        const inScript = rules.some(r => r === '015' || r === '019' || r === '020')
+          ? exposedKeysInOutput(scriptHex)
+          : null;
 
         const inserted = await insertUtxo(client, {
           tx_hash: tx.txid,
@@ -153,20 +162,29 @@ export async function processBlock(
           address,
           loss_rules: rules,
           loss_bucket: bucket,
-          pubkey_exposed: p2pkPubkey !== null,
-          pubkey_hex: p2pkPubkey,
+          pubkey_exposed: inScript !== null,
+          pubkey_hex: inScript ? inScript.keys.join(',') : null,
         });
 
         // Increment address_info only if a row was actually inserted. On a
         // reprocessed block the insert is a no-op (ON CONFLICT), so a blind
         // increment here is exactly what drifted the counters — and left
-        // "ghost" balances on fully-spent addresses. P2PK marking is idempotent
-        // (sets a flag WHERE pubkey_hex IS NULL), so it needn't be gated.
+        // "ghost" balances on fully-spent addresses. Key-in-script marking is
+        // idempotent, so it needn't be gated.
         if (address && inserted) {
-          await upsertAddressInfo(client, address, blockNumber, true, valueSats);
+          const prior = await upsertAddressInfo(client, address, blockNumber, true, valueSats);
+          // A receipt at an address whose key(s) are already on-chain is
+          // exposed from birth: the key stays public forever, so a coin that
+          // lands later is as reachable as one that was there at the spend.
+          if (!inScript && prior?.pubkey_exposed) {
+            await flagUtxoExposed(
+              client, tx.txid, i, blockNumber, prior.pubkey_hex,
+              exposureRule(prior.exposure_kind ?? 'pkh')
+            );
+          }
         }
-        if (address && p2pkPubkey !== null) {
-          await markAddressP2PKExposed(client, address);
+        if (address && inScript) {
+          await markAddressKeyInScript(client, address, inScript.kind, inScript.keys.join(','));
         }
       }
     }
@@ -178,35 +196,4 @@ export async function processBlock(
   } finally {
     client.release();
   }
-}
-
-function extractPubkeyFromInput(vin: any): string | null {
-  // P2PKH scriptSig: "<sig> <pubkey>" — last token is pubkey
-  if (vin.scriptSig?.asm) {
-    const parts = vin.scriptSig.asm.split(' ');
-    const last = parts[parts.length - 1];
-    if (last && (last.length === 66 || last.length === 130) && !last.startsWith('OP_')) {
-      return last;
-    }
-  }
-  // P2WPKH witness: [sig, pubkey]
-  if (vin.txinwitness && vin.txinwitness.length === 2) {
-    const pubkey = vin.txinwitness[1];
-    if (pubkey && (pubkey.length === 66 || pubkey.length === 130)) {
-      return pubkey;
-    }
-  }
-  return null;
-}
-
-function extractP2PKPubkey(scriptHex: string): string | null {
-  // Uncompressed P2PK: 41 + pubkey(130 chars) + ac
-  if (scriptHex.length === 134 && scriptHex.startsWith('41') && scriptHex.endsWith('ac')) {
-    return scriptHex.slice(2, 132);
-  }
-  // Compressed P2PK: 21 + pubkey(66 chars) + ac
-  if (scriptHex.length === 70 && scriptHex.startsWith('21') && scriptHex.endsWith('ac')) {
-    return scriptHex.slice(2, 68);
-  }
-  return null;
 }

@@ -19,6 +19,30 @@ export const RULE_CHIP_LABELS: Record<string, string> = {
   '015': 'P2PK',
   '016': 'EXPOSED-PKH',
   '018': 'NUMS-KEY',
+  '019': 'P2TR',
+  '020': 'P2MS',
+  '021': 'EXPOSED-SCRIPT',
+};
+
+// address_info.exposure_kind -> chip label. Legacy rows (NULL kind) resolve to
+// p2pk / pkh in SQL before they reach here.
+export const EXPOSURE_KIND_CHIP: Record<string, string> = {
+  'p2pk': 'P2PK',
+  'p2tr': 'P2TR',
+  'p2ms': 'P2MS',
+  'pkh': 'EXPOSED-PKH',
+  'script': 'EXPOSED-SCRIPT',
+  'script-mixed': 'EXPOSED-SCRIPT*',
+};
+
+// Plain-language account of how the keys became public, for the address page.
+export const EXPOSURE_KIND_TEXT: Record<string, string> = {
+  'p2pk': 'this is a pay-to-pubkey address: the public key is in the output script itself.',
+  'p2tr': 'this is a taproot address: the output key is a curve point in the script, so key-path spending needs only its discrete log.',
+  'p2ms': 'this is a bare multisig output: every cosigner key is in the output script.',
+  'pkh': 'this address has revealed its public key in a prior spend.',
+  'script': 'a prior spend revealed this address’s redeem or witness script, and with it every signing key it requires.',
+  'script-mixed': 'a prior spend revealed this address’s redeem or witness script, including its signing keys; the script also has a hash-preimage condition on at least one branch, so a key alone may not satisfy every path.',
 };
 
 // Long-form titles for the top-losses list.
@@ -62,7 +86,7 @@ export const BREAKDOWN_GROUPS: { provable: BreakdownGroup[]; probable: Breakdown
 
 const PROVABLE_RULES = new Set(['000', '001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011']);
 const PROBABLE_RULES = new Set(['012', '013', '018']);
-const QUANTUM_RULES = new Set(['015', '016']);
+const QUANTUM_RULES = new Set(['015', '016', '019', '020', '021']);
 
 export type RuleCategory = 'provable' | 'probable' | 'quantum' | 'other';
 

@@ -41,17 +41,42 @@ export async function deleteUtxo(client: PoolClient, txHash: string, outputIndex
   return (res.rowCount ?? 0) > 0;
 }
 
+// A spend from `address` has revealed its key(s): everything still sitting at
+// the address is exposed. `rule` is 016 (P2PKH / P2WPKH key) or 021 (keys in
+// a revealed P2SH / P2WSH script). The rule is only recorded on otherwise
+// active outputs (bucket 0); the flag is set regardless, since the key is
+// known either way. Provably-lost rows (bucket 1) have no key to break.
 export async function markAddressPubkeyExposed(
-  client: PoolClient, address: string, pubkeyHex: string
+  client: PoolClient, address: string, pubkeyHex: string, rule: '016' | '021'
 ): Promise<void> {
   await client.query(`
     UPDATE utxos
     SET pubkey_exposed = TRUE,
         pubkey_hex = $2,
         loss_rules = CASE
-          WHEN NOT (loss_rules @> '{016}') AND loss_bucket = 0 THEN array_append(loss_rules, '016')
+          WHEN NOT (loss_rules @> ARRAY[$3]::text[]) AND loss_bucket = 0 THEN array_append(loss_rules, $3)
           ELSE loss_rules
         END
-    WHERE address = $1 AND pubkey_exposed = FALSE
-  `, [address, pubkeyHex]);
+    WHERE address = $1 AND pubkey_exposed = FALSE AND loss_bucket <> 1
+  `, [address, pubkeyHex, rule]);
+}
+
+// A single UTXO received at an address whose key(s) were already on-chain:
+// exposed from birth. Keyed by the full primary key so the partition is pruned.
+export async function flagUtxoExposed(
+  client: PoolClient,
+  txHash: string, outputIndex: number, blockNumber: number,
+  pubkeyHex: string | null, rule: '016' | '021'
+): Promise<void> {
+  await client.query(`
+    UPDATE utxos
+    SET pubkey_exposed = TRUE,
+        pubkey_hex = COALESCE($4, pubkey_hex),
+        loss_rules = CASE
+          WHEN NOT (loss_rules @> ARRAY[$5]::text[]) AND loss_bucket = 0 THEN array_append(loss_rules, $5)
+          ELSE loss_rules
+        END
+    WHERE tx_hash = $1 AND output_index = $2 AND block_number = $3
+      AND pubkey_exposed = FALSE AND loss_bucket <> 1
+  `, [txHash, outputIndex, blockNumber, pubkeyHex, rule]);
 }

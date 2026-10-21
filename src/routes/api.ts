@@ -34,7 +34,9 @@ router.get('/stats', async (req: Request, res: Response) => {
 
       const { rows: snapRows } = await pool.query(
         `SELECT snapshot_key, total_sats, utxo_count FROM loss_snapshots
-         WHERE snapshot_key IN ('provably_lost', 'probably_lost', 'quantum_p2pk', 'quantum_all_exposed', 'all_utxos')`
+         WHERE snapshot_key IN ('provably_lost', 'probably_lost', 'all_utxos',
+                                'quantum_p2pk', 'quantum_p2tr', 'quantum_p2ms',
+                                'quantum_exposed_pkh', 'quantum_exposed_script', 'quantum_all_exposed')`
       );
 
       const snaps: Record<string, any> = {};
@@ -55,6 +57,10 @@ router.get('/stats', async (req: Request, res: Response) => {
         provably_lost_sats: snaps['provably_lost']?.total_sats?.toString() ?? '0',
         probably_lost_sats: snaps['probably_lost']?.total_sats?.toString() ?? '0',
         quantum_p2pk_sats: snaps['quantum_p2pk']?.total_sats?.toString() ?? '0',
+        quantum_p2tr_sats: snaps['quantum_p2tr']?.total_sats?.toString() ?? '0',
+        quantum_p2ms_sats: snaps['quantum_p2ms']?.total_sats?.toString() ?? '0',
+        quantum_exposed_pkh_sats: snaps['quantum_exposed_pkh']?.total_sats?.toString() ?? '0',
+        quantum_exposed_script_sats: snaps['quantum_exposed_script']?.total_sats?.toString() ?? '0',
         quantum_all_exposed_sats: snaps['quantum_all_exposed']?.total_sats?.toString() ?? '0',
       };
     });
@@ -200,23 +206,35 @@ router.get('/loss-breakdown', async (req: Request, res: Response) => {
 router.get('/quantum', async (req: Request, res: Response) => {
   try {
     const data = await withCache('api:quantum', 300, async () => {
-      // P2PK stats
-      const { rows: p2pkRows } = await pool.query(`
-        SELECT COALESCE(SUM(value_sats), 0) total_sats, COUNT(*) utxo_count
-        FROM utxos WHERE loss_rules @> '{015}'
+      // Per-output totals by how the key became public. From the hourly
+      // snapshot, so this agrees with the homepage and /quantum by construction
+      // (the old version summed address_info and could disagree with both).
+      const { rows: snapRows } = await pool.query(`
+        SELECT snapshot_key, total_sats::text, utxo_count::text, computed_at_block
+        FROM loss_snapshots WHERE snapshot_key LIKE 'quantum_%'
+      `);
+      const snaps: Record<string, any> = {};
+      for (const r of snapRows) snaps[r.snapshot_key] = r;
+      const cat = (key: string) => ({
+        total_sats: snaps[key]?.total_sats ?? '0',
+        utxo_count: snaps[key]?.utxo_count ?? '0',
+      });
+
+      // Address-level view: addresses with a balance, by exposure kind.
+      // Legacy rows (pre-migration 008) resolve to p2pk / pkh.
+      const { rows: byKind } = await pool.query(`
+        SELECT COALESCE(exposure_kind, CASE WHEN is_p2pk THEN 'p2pk' ELSE 'pkh' END) AS kind,
+               COUNT(*)::text AS address_count,
+               COALESCE(SUM(utxo_value_sats), 0)::text AS total_sats
+        FROM address_info WHERE pubkey_exposed = TRUE AND utxo_count > 0
+        GROUP BY 1 ORDER BY 1
       `);
 
-      // Top P2PK addresses — use pre-aggregated address_info with is_p2pk flag
-      const { rows: topP2pk } = await pool.query(`
-        SELECT address, utxo_value_sats AS balance, utxo_count
-        FROM address_info WHERE is_p2pk = TRUE AND utxo_count > 0
+      const { rows: top } = await pool.query(`
+        SELECT address, utxo_value_sats AS balance, utxo_count,
+               COALESCE(exposure_kind, CASE WHEN is_p2pk THEN 'p2pk' ELSE 'pkh' END) AS exposure_kind
+        FROM address_info WHERE pubkey_exposed = TRUE AND utxo_count > 0
         ORDER BY utxo_value_sats DESC LIMIT 20
-      `);
-
-      // Exposed PKH stats (pubkey revealed via prior spend, not P2PK)
-      const { rows: exposedRows } = await pool.query(`
-        SELECT COALESCE(SUM(utxo_value_sats), 0) total_sats, SUM(utxo_count) utxo_count
-        FROM address_info WHERE pubkey_exposed = TRUE AND is_p2pk = FALSE AND utxo_count > 0
       `);
 
       // By exposure year — address_info has pubkey_exposed_at_block and pre-aggregated balance
@@ -229,25 +247,25 @@ router.get('/quantum', async (req: Request, res: Response) => {
         GROUP BY 1 ORDER BY 1
       `);
 
-      const p2pkTotal = BigInt(p2pkRows[0].total_sats);
-      const exposedTotal = BigInt(exposedRows[0].total_sats);
-
       return {
-        p2pk: {
-          total_sats: p2pkTotal.toString(),
-          utxo_count: p2pkRows[0].utxo_count.toString(),
-          top_addresses: topP2pk.map(r => ({
-            address: r.address,
-            balance: r.balance.toString(),
-            utxo_count: r.utxo_count.toString(),
-          })),
-        },
-        exposed_pkh: {
-          total_sats: exposedTotal.toString(),
-          utxo_count: exposedRows[0].utxo_count.toString(),
-          by_exposure_year: byYear,
-        },
-        combined_total_sats: (p2pkTotal + exposedTotal).toString(),
+        computed_at_block: snaps['quantum_all_exposed']?.computed_at_block ?? null,
+        // Exposed from creation: the key is in the output script.
+        p2pk: cat('quantum_p2pk'),
+        p2tr: cat('quantum_p2tr'),
+        p2ms: cat('quantum_p2ms'),
+        // Exposed from first spend: the key (016) or script (021) was revealed.
+        exposed_pkh: { ...cat('quantum_exposed_pkh'), by_exposure_year: byYear },
+        exposed_script: cat('quantum_exposed_script'),
+        total: cat('quantum_all_exposed'),
+        // Kept for callers of the previous shape.
+        combined_total_sats: cat('quantum_all_exposed').total_sats,
+        addresses_by_kind: byKind,
+        top_addresses: top.map(r => ({
+          address: r.address,
+          balance: r.balance.toString(),
+          utxo_count: r.utxo_count.toString(),
+          exposure_kind: r.exposure_kind,
+        })),
       };
     });
     res.json(data);
@@ -413,6 +431,13 @@ router.get('/address/:addr', async (req: Request, res: Response) => {
         // sufficiently powerful quantum computer.
         pubkey_exposed: addrInfo?.pubkey_exposed ?? false,
         is_p2pk: addrInfo?.is_p2pk ?? false,
+        // How the key(s) became public: p2pk, p2tr, p2ms (in the output
+        // script), pkh (revealed by a spend), script / script-mixed (revealed
+        // redeem or witness script; "mixed" also has a hash-preimage branch).
+        exposure_kind: addrInfo?.pubkey_exposed
+          ? (addrInfo.exposure_kind ?? (addrInfo.is_p2pk ? 'p2pk' : 'pkh'))
+          : null,
+        // Comma-joined when a script revealed several keys.
         pubkey_hex: addrInfo?.pubkey_hex ?? null,
       },
       utxos: utxos.map((u: any) => ({

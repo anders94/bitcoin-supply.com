@@ -9,10 +9,13 @@ block content
   if isQuantumVulnerable
     .alert-inset
       span(style='color:var(--purple);font-weight:600') Quantum exposed:
-      |  this address has revealed its public key in a prior spend. A sufficiently powerful quantum computer could derive the private key.
+      |  #{exposureText} A sufficiently powerful quantum computer could derive the private key#{exposureKind === 'p2ms' || exposureKind === 'script' || exposureKind === 'script-mixed' ? 's' : ''}.
+      |
+      span.chip.chip--purple= exposureChip
       if addrInfo && addrInfo.pubkey_hex
-        br
-        span.hash(style='font-size:8.5px;color:var(--faded)') pubkey #{addrInfo.pubkey_hex}
+        each k in String(addrInfo.pubkey_hex).split(',')
+          br
+          span.hash(style='font-size:8.5px;color:var(--faded)') #{exposureKind === 'p2tr' ? 'output key' : 'pubkey'} #{k}
 
   .rows(style='font-size:10px')
     .row.row--dotted

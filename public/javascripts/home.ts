@@ -20,7 +20,9 @@ interface SupplyPayload {
     probable: { rules: string[]; label: string; sats: string; count: string }[];
   };
   quantum: {
-    p2pk_sats: string; exposed_pkh_sats: string; total_sats: string; total_keys: string;
+    p2pk_sats: string; p2tr_sats: string; p2ms_sats: string;
+    exposed_pkh_sats: string; exposed_script_sats: string;
+    total_sats: string; total_keys: string;
     curve: { cum_sats: string; key_count: string; min_value_sats: string }[];
   };
   computed_at: string;

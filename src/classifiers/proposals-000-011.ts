@@ -32,7 +32,7 @@ export function modpow(base: bigint, exp: bigint, mod: bigint): bigint {
 // Parses a bare M-of-N multisig scriptPubKey hex.
 // Format: OP_M [push+key]×N OP_N OP_CHECKMULTISIG
 // Returns { m, n, pubkeys } or null if not a standard multisig script.
-function parseMultisigScript(hex: string): { m: number; n: number; pubkeys: string[] } | null {
+export function parseMultisigScript(hex: string): { m: number; n: number; pubkeys: string[] } | null {
   if (!hex.endsWith('ae')) return null;
   const mOpcode = parseInt(hex.slice(0, 2), 16);
   if (mOpcode < 0x51 || mOpcode > 0x60) return null;

@@ -47,3 +47,17 @@ the quantum tag is only meaningful for UTXOs that are otherwise spendable.
 
 Combined, Proposals 015 + 016 define the full quantum exposure set tracked in the
 `quantum_all_exposed` snapshot.
+
+## Amendment (2026-10-13): receipts after exposure
+
+The original implementation tagged only the UTXOs present at the address at the moment of the
+revealing spend. A key, once on-chain, stays public, so a coin that arrives at the address
+*later* is exactly as reachable — and exchange hot wallets receive constantly after their first
+spend. The ETL now checks the address's exposure state as each output is inserted and tags the
+new UTXO immediately. This was the single largest source of under-counting (≈2.3M BTC at the
+time of the amendment). `scripts/backfill-quantum-exposure.ts --phase receipts` tags the
+existing rows.
+
+The same rule applies to P2SH-P2WPKH spends (`scriptSig` = `0014…`, key in `witness[1]`):
+the address type is script-hash but the revealed secret is a single key, so it is 016, not
+021.

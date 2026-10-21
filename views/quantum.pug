@@ -4,19 +4,34 @@ include mixins
 block content
   .page-head
     span.label QUANTUM EXPOSURE
-    span.big #{btc8(exposedSats)} BTC exposed
-    span.desc P2PK outputs embed the public key in the script itself. Hashed outputs stay safe until a spend reveals the key — after that, anything left at the address is exposed. The homepage slider sweeps an attack over these outputs, largest keys first.
+    span.big #{btc8(all.sats)} BTC exposed
+    span.desc An output is exposed once its public key is visible on-chain. Three output types publish the key on creation: pay-to-pubkey (P2PK), taproot (P2TR, the output key is a curve point) and bare multisig (P2MS). Every other type publishes it on first spend — a single key for P2PKH and P2WPKH, the whole redeem or witness script for P2SH and P2WSH. From that moment everything at the address is exposed, including coins that arrive later. The homepage slider sweeps an attack over these outputs, largest first.
 
   .rows(style='font-size:10px')
     .row.row--dotted
-      span.k P2PK outputs
-      span.v--purple #{btc8(p2pkSats)} BTC · #{num(p2pkCount)} utxos
+      span.k P2PK outputs — key in script
+      span.v--purple #{btc8(p2pk.sats)} BTC · #{num(p2pk.count)} utxos
     .row.row--dotted
-      span.k exposed P2PKH
-      span.v--purple #{btc8(BigInt(exposedSats) - BigInt(p2pkSats))} BTC
+      span.k P2TR outputs — key in script
+      span.v--purple #{btc8(p2tr.sats)} BTC · #{num(p2tr.count)} utxos
+    .row.row--dotted
+      span.k P2MS outputs — keys in script
+      span.v--purple #{btc8(p2ms.sats)} BTC · #{num(p2ms.count)} utxos
+    .row.row--dotted
+      span.k P2PKH / P2WPKH — key revealed by a spend
+      span.v--purple #{btc8(pkh.sats)} BTC#{pkh.present ? ' · ' + num(pkh.count) + ' utxos' : ''}
+    .row.row--dotted
+      span.k P2SH / P2WSH — script revealed by a spend
+      span.v--purple #{btc8(script.sats)} BTC · #{num(script.count)} utxos
     .row.row--dotted
       span.k total exposed
-      span(style='font-weight:600') #{btc8(exposedSats)} BTC · #{num(exposedCount)} utxos
+      span(style='font-weight:600') #{btc8(all.sats)} BTC · #{num(all.count)} utxos
+
+  if mixed.sats !== '0'
+    .note--italic Of the P2SH / P2WSH figure, #{btc8(mixed.sats)} BTC across #{num(mixed.addrs)} addresses sits behind scripts that also carry a hash-preimage condition (HTLC-style). Their keys are public and the usual timeout branch needs only a signature, so they are counted — marked EXPOSED-SCRIPT* below.
+
+  if crosscheck
+    .note--italic Cross-check: #[a(href='https://bitcoin-risq-list.projecteleven.com', style='color:var(--secondary)') Project Eleven’s Bitcoin Risq List] reports #{btc8(crosscheck.total_sats)} BTC at block #{num(crosscheck.block_height)} (fetched #{dateUtc(crosscheck.fetched_at)}). They count by address and resolve P2PK outputs to their P2PKH-form address; we count output by output. Anything beyond that residue is a divergence worth explaining.
 
   section.section.section--tight
     span.label TOP EXPOSED ADDRESSES · BY BALANCE
@@ -25,8 +40,8 @@ block content
         .event-row
           a.txid(href=`/address/${a.address}`)
             +ident(a.address, shortAddress(a.address))
-          span.chip.chip--purple= a.is_p2pk ? 'P2PK' : 'EXPOSED-PKH'
+          span.chip.chip--purple= a.chip
           span.yr= num(a.utxo_count) + ' utxos'
           span.amt(style='font-weight:600')= btc8(a.balance)
 
-  .note--italic A different cut through the same outputs — never added to the loss total. #[a(href='/', style='color:var(--secondary)') Sweep the capture on the homepage →]
+  .note--italic Not counted: outputs that are provably unspendable (off-curve keys have no private key to derive), hashed outputs that have never spent, and revealed scripts with no key in them. A different cut through the same outputs — never added to the loss total. #[a(href='/', style='color:var(--secondary)') Sweep the capture on the homepage →] · Rules: #[a(href='/proposals/015', style='color:var(--secondary)') 015] #[a(href='/proposals/016', style='color:var(--secondary)') 016] #[a(href='/proposals/019', style='color:var(--secondary)') 019] #[a(href='/proposals/020', style='color:var(--secondary)') 020] #[a(href='/proposals/021', style='color:var(--secondary)') 021]
