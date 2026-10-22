@@ -146,10 +146,10 @@ export async function processBlock(
         // Keys in the output script itself (015 P2PK, 019 P2TR, 020 P2MS) are
         // exposed from creation. The rule set already enforces on-curve, so an
         // off-curve "key" (provably lost, no private key exists) is never
-        // flagged — the old ETL flagged every P2PK shape regardless.
-        const inScript = rules.some(r => r === '015' || r === '019' || r === '020')
-          ? exposedKeysInOutput(scriptHex)
-          : null;
+        // flagged — the old ETL flagged every P2PK shape regardless. Bucket 4
+        // also excludes NUMS keys (018, bucket 2): lost outputs stay out of
+        // the quantum lens.
+        const inScript = bucket === 4 ? exposedKeysInOutput(scriptHex) : null;
 
         const inserted = await insertUtxo(client, {
           tx_hash: tx.txid,

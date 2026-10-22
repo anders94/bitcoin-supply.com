@@ -17,7 +17,7 @@ const CURVE_FRACTIONS = [
 interface GroupRow {
   loss_bucket: number;
   pubkey_exposed: boolean;
-  script_type: string | null;
+  exposure_class: 'p2pk' | 'p2tr' | 'p2ms' | 'pkh' | 'script' | null;
   value_band: number; // 0: >=100 BTC, 1: 1-100, 2: 0.01-1, 3: <0.01
   age_years: number;  // full years since creation, clamped to [0, 25]
   total_sats: string;
@@ -63,7 +63,14 @@ export async function updateSnapshots(): Promise<void> {
 async function supplyScan(tipBlock: number, tipTs: Date): Promise<void> {
   const { rows } = await pool.query<GroupRow>(`
     SELECT loss_bucket, pubkey_exposed,
-           CASE WHEN pubkey_exposed THEN script_type END AS script_type,
+           -- How the key became public. By rule, not script_type, for spends:
+           -- a P2SH-P2WPKH spend reveals one key (016), not a script (021).
+           CASE WHEN NOT pubkey_exposed THEN NULL
+                WHEN script_type = 'pubkey' THEN 'p2pk'
+                WHEN script_type = 'witness_v1_taproot' THEN 'p2tr'
+                WHEN script_type = 'multisig' THEN 'p2ms'
+                WHEN loss_rules @> '{021}' THEN 'script'
+                ELSE 'pkh' END AS exposure_class,
            CASE WHEN value_sats >= 10000000000 THEN 0
                 WHEN value_sats >= 100000000   THEN 1
                 WHEN value_sats >= 1000000     THEN 2
@@ -85,11 +92,13 @@ async function supplyScan(tipBlock: number, tipTs: Date): Promise<void> {
   const provable = zero();
   const probable = zero();
   // Quantum lens, split by how the key became public (see Proposals 015, 016,
-  // 019, 020, 021). Provably-lost rows are excluded: there is no key to break.
+  // 019, 020, 021). Only spendable rows (buckets 0 / 4) count: provably-lost
+  // rows have no key to break, and probably-lost ones (NUMS keys, 018) are
+  // kept out of the lens by the 016 / 018 convention.
   const p2pk = zero();
   const p2tr = zero();
   const p2ms = zero();
-  const exposedPkh = zero();     // P2PKH / P2WPKH, key revealed by a spend
+  const exposedPkh = zero();     // P2PKH / P2WPKH / P2SH-P2WPKH, key revealed by a spend
   const exposedScript = zero();  // P2SH / P2WSH, keys revealed by a script spend
   const exposed = zero();        // everything above
   const dormant = DORMANCY_YEARS.map(() => zero());
@@ -101,14 +110,14 @@ async function supplyScan(tipBlock: number, tipTs: Date): Promise<void> {
     add(all, row);
     if (row.loss_bucket === 1) add(provable, row);
     if (row.loss_bucket === 1 || row.loss_bucket === 2) add(probable, row);
-    if (row.pubkey_exposed && row.loss_bucket !== 1) {
+    if (row.pubkey_exposed && (row.loss_bucket === 0 || row.loss_bucket === 4)) {
       add(exposed, row);
-      switch (row.script_type) {
-        case 'pubkey': add(p2pk, row); break;
-        case 'witness_v1_taproot': add(p2tr, row); break;
-        case 'multisig': add(p2ms, row); break;
-        case 'pubkeyhash': case 'witness_v0_keyhash': add(exposedPkh, row); break;
-        case 'scripthash': case 'witness_v0_scripthash': add(exposedScript, row); break;
+      switch (row.exposure_class) {
+        case 'p2pk': add(p2pk, row); break;
+        case 'p2tr': add(p2tr, row); break;
+        case 'p2ms': add(p2ms, row); break;
+        case 'pkh': add(exposedPkh, row); break;
+        case 'script': add(exposedScript, row); break;
       }
     }
     if (row.loss_bucket === 0 || row.loss_bucket === 4) {
@@ -179,7 +188,7 @@ async function ruleBreakdown(tipBlock: number, out: { rules: any[]; miner_loss: 
 // Breakpoints are cumulative-capture caps at fractions of the exposed total.
 async function quantumCurve(tipBlock: number): Promise<void> {
   const { rows: totalRows } = await pool.query(
-    `SELECT COALESCE(SUM(value_sats), 0)::text AS total FROM utxos WHERE pubkey_exposed = TRUE AND loss_bucket <> 1`
+    `SELECT COALESCE(SUM(value_sats), 0)::text AS total FROM utxos WHERE pubkey_exposed = TRUE AND loss_bucket IN (0, 4)`
   );
   const total = BigInt(totalRows[0].total);
   if (total === 0n) {
@@ -199,7 +208,7 @@ async function quantumCurve(tipBlock: number): Promise<void> {
     WITH ranked AS (
       SELECT address, value_sats,
              SUM(value_sats) OVER (ORDER BY value_sats DESC) AS cumulative
-      FROM utxos WHERE pubkey_exposed = TRUE AND loss_bucket <> 1
+      FROM utxos WHERE pubkey_exposed = TRUE AND loss_bucket IN (0, 4)
     )
     SELECT ${aggs},
       COUNT(*) AS utxo_count_max,

@@ -162,7 +162,7 @@ Processing inputs before outputs in each transaction maintains UTXO set consiste
 
 ### Pubkey exposure
 
-`address_info` records how an address's keys became public (`exposure_kind`: `p2pk`, `p2tr`, `p2ms`, `pkh`, `script`, `script-mixed`), the key(s) (`pubkey_hex`, comma-joined for scripts) and the block of first exposure. Every UTXO at an exposed address carries `pubkey_exposed = TRUE`, whether it was there at the revealing spend or arrived later — a key stays public forever. Provably-lost outputs (bucket 1) are never flagged: an off-curve key has no private key to derive.
+`address_info` records how an address's keys became public (`exposure_kind`: `p2pk`, `p2tr`, `p2ms`, `pkh`, `script`, `script-mixed`), the key(s) (`pubkey_hex`, comma-joined for scripts) and the block of first exposure. Every UTXO at an exposed address carries `pubkey_exposed = TRUE`, whether it was there at the revealing spend or arrived later — a key stays public forever. Lost outputs are never flagged: an off-curve key (bucket 1) has no private key to derive, and NUMS-key burns (bucket 2, Proposal 018) stay out of the quantum lens by convention.
 
 The quantum slider therefore reflects the current exposure state, not the creation-time state. `scripts/backfill-quantum-exposure.ts` brings an existing database up to these rules (see `docs/quantum-exposure-plan.md`).
 

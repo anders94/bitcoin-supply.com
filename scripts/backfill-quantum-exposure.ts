@@ -4,9 +4,10 @@
 //
 // Phases (comma-separated via --phase; default runs the SQL-only ones):
 //
-//   fix       Clear the exposed flag on provably-lost P2PK rows. The old ETL
+//   fix       Clear the exposed flag on lost rows (buckets 1 / 2). The old ETL
 //             flagged every P2PK-shaped script, including off-curve keys that
-//             have no private key to derive.
+//             have no private key to derive and NUMS keys (018), which the
+//             quantum lens leaves out by convention.
 //   kinds     Fill address_info.exposure_kind for rows written before
 //             migration 008 (p2pk if is_p2pk, else pkh).
 //   receipts  Flag UTXOs received at an address *after* its key was revealed
@@ -15,9 +16,11 @@
 //   p2ms      Proposal 020: bare multisig with >= M on-curve keys.
 //   scripts   Proposal 021: keys revealed by historical P2SH / P2WSH spends.
 //             The database keeps no spent inputs, so this walks the chain over
-//             RPC. Only inputs whose prevout address still holds a balance are
-//             considered. Resumable: progress is kept in etl_state under
-//             'backfill_021_next_block'. Run it on the ETL box.
+//             RPC. Every not-yet-exposed address is marked, empty or not: an
+//             address that is empty today and refilled later must already be
+//             known as exposed, or the ETL cannot flag the receipt. Resumable:
+//             progress is kept in etl_state under 'backfill_021_next_block'.
+//             Run it on the ETL box.
 //
 // Usage:
 //   npx tsx scripts/backfill-quantum-exposure.ts                      # dry run, SQL phases
@@ -31,11 +34,10 @@
 // figure on the site comes from loss_snapshots / computed_stats.
 
 import 'dotenv/config';
-import { createHash } from 'node:crypto';
 import { pool } from '../src/db/index.js';
 import { config } from '../src/config.js';
 import { getBlockHash, getBlock } from '../src/services/bitcoin-rpc.js';
-import { exposedKeysInOutput, revealedKeysFromInput, exposureRule } from '../src/classifiers/exposure.js';
+import { exposedKeysInOutput, revealedKeysFromInput, exposureRule, Exposure } from '../src/classifiers/exposure.js';
 import { markAddressPubkeyExposed as markAddr } from '../src/db/address-info.js';
 import { markAddressPubkeyExposed as markUtxos } from '../src/db/utxos.js';
 
@@ -60,17 +62,17 @@ const log = (s: string) => console.log(`[${new Date().toISOString().slice(11, 19
 // fix: off-curve P2PK rows carry no breakable key
 // ---------------------------------------------------------------------------
 async function phaseFix(): Promise<void> {
-  log('phase fix: provably-lost rows flagged exposed');
+  log('phase fix: lost rows (buckets 1 / 2) flagged exposed');
   const { rows } = await pool.query(`
     SELECT COUNT(*)::text AS n, COALESCE(SUM(value_sats), 0)::text AS sats
-    FROM utxos WHERE loss_bucket = 1 AND pubkey_exposed = TRUE
+    FROM utxos WHERE loss_bucket IN (1, 2) AND pubkey_exposed = TRUE
   `);
   log(`  ${rows[0].n} rows, ${btc(rows[0].sats)} BTC`);
   if (!EXECUTE) return;
   for (const [lo, hi] of EPOCHS) {
     const res = await pool.query(`
       UPDATE utxos SET pubkey_exposed = FALSE, pubkey_hex = NULL
-      WHERE loss_bucket = 1 AND pubkey_exposed = TRUE AND block_number >= $1 AND block_number < $2
+      WHERE loss_bucket IN (1, 2) AND pubkey_exposed = TRUE AND block_number >= $1 AND block_number < $2
     `, [lo, hi]);
     log(`  epoch ${lo}-${hi}: cleared ${res.rowCount}`);
   }
@@ -102,7 +104,7 @@ async function phaseReceipts(): Promise<void> {
   const { rows } = await pool.query(`
     SELECT COUNT(*)::text AS n, COALESCE(SUM(u.value_sats), 0)::text AS sats
     FROM utxos u JOIN address_info ai ON ai.address = u.address
-    WHERE ai.pubkey_exposed AND NOT u.pubkey_exposed AND u.loss_bucket <> 1
+    WHERE ai.pubkey_exposed AND NOT u.pubkey_exposed AND u.loss_bucket IN (0, 4)
   `);
   log(`  ${rows[0].n} rows, ${btc(rows[0].sats)} BTC`);
   if (!EXECUTE) return;
@@ -117,7 +119,7 @@ async function phaseReceipts(): Promise<void> {
       FROM address_info ai,
            LATERAL (SELECT CASE WHEN ai.exposure_kind IN ('script', 'script-mixed') THEN '021' ELSE '016' END AS rule) k
       WHERE ai.address = u.address AND ai.pubkey_exposed
-        AND NOT u.pubkey_exposed AND u.loss_bucket <> 1
+        AND NOT u.pubkey_exposed AND u.loss_bucket IN (0, 4)
         AND u.block_number >= $1 AND u.block_number < $2
     `, [lo, hi]);
     log(`  epoch ${lo}-${hi}: flagged ${res.rowCount}`);
@@ -139,8 +141,8 @@ async function phaseP2tr(): Promise<void> {
     if (hi <= 709_632) continue; // taproot activation
     const res = await pool.query(`
       UPDATE utxos
-      SET pubkey_exposed = TRUE,
-          pubkey_hex = substr(script_hex, 5, 64),
+      SET pubkey_exposed = loss_bucket <> 2,  -- NUMS output keys (018) stay unflagged
+          pubkey_hex = CASE WHEN loss_bucket <> 2 THEN substr(script_hex, 5, 64) END,
           loss_rules = array_append(loss_rules, '019'),
           loss_bucket = CASE WHEN loss_bucket = 0 THEN 4 ELSE loss_bucket END
       WHERE script_type = 'witness_v1_taproot' AND loss_bucket <> 1 AND NOT loss_rules @> '{019}'
@@ -156,7 +158,8 @@ async function phaseP2tr(): Promise<void> {
         pubkey_hex = t.x, updated_at = now()
     FROM (
       SELECT address, MIN(pubkey_hex) AS x
-      FROM utxos WHERE script_type = 'witness_v1_taproot' AND loss_rules @> '{019}' AND address IS NOT NULL
+      FROM utxos WHERE script_type = 'witness_v1_taproot' AND loss_rules @> '{019}' AND pubkey_exposed
+        AND address IS NOT NULL
       GROUP BY address
     ) t
     WHERE ai.address = t.address AND ai.exposure_kind IS DISTINCT FROM 'p2tr'
@@ -171,7 +174,7 @@ async function phaseP2ms(): Promise<void> {
   log('phase p2ms: bare multisig outputs (020)');
   const { rows } = await pool.query(`
     SELECT tx_hash, output_index, block_number, script_hex, value_sats::text
-    FROM utxos WHERE script_type = 'multisig' AND loss_bucket <> 1 AND NOT loss_rules @> '{020}'
+    FROM utxos WHERE script_type = 'multisig' AND loss_bucket IN (0, 4) AND NOT loss_rules @> '{020}'
   `);
   const targets = rows
     .map(r => ({ ...r, exp: exposedKeysInOutput(r.script_hex) }))
@@ -197,59 +200,6 @@ async function phaseP2ms(): Promise<void> {
 // scripts: Proposal 021 — chain walk
 // ---------------------------------------------------------------------------
 
-// Candidate addresses are held as sorted 64-bit hashes (8 bytes each instead
-// of ~80 for a JS string) with a done-bitmap alongside. A hit is confirmed
-// against the database before anything is written, so a collision can only
-// cost a lookup, never a wrong flag.
-const h64 = (s: string): bigint => createHash('sha256').update(s).digest().readBigUInt64LE(0);
-
-class CandidateSet {
-  private hashes: BigUint64Array;
-  private done: Uint8Array;
-  constructor(hashes: BigUint64Array) {
-    this.hashes = hashes.sort();
-    this.done = new Uint8Array(hashes.length);
-  }
-  get size() { return this.hashes.length; }
-  // Index of the hash, or -1 when absent or already handled.
-  find(address: string): number {
-    const h = h64(address);
-    let lo = 0, hi = this.hashes.length - 1;
-    while (lo <= hi) {
-      const mid = (lo + hi) >>> 1;
-      const v = this.hashes[mid];
-      if (v === h) return this.done[mid] ? -1 : mid;
-      if (v < h) lo = mid + 1; else hi = mid - 1;
-    }
-    return -1;
-  }
-  settle(i: number) { this.done[i] = 1; }
-}
-
-async function loadCandidates(): Promise<CandidateSet> {
-  // P2SH (3…) and P2WSH (bc1q…, 62 chars) addresses that still hold coin and
-  // are not yet exposed. P2SH-P2WPKH addresses that already spent were caught
-  // by the old ETL (witness[1]) and are excluded by pubkey_exposed = FALSE.
-  const where = `utxo_count > 0 AND pubkey_exposed = FALSE
-    AND (address LIKE '3%' OR (address LIKE 'bc1q%' AND length(address) = 62))`;
-  const { rows: [{ n }] } = await pool.query(`SELECT COUNT(*)::text AS n FROM address_info WHERE ${where}`);
-  const total = Number(n);
-  log(`  ${total} candidate script-hash addresses with a balance`);
-  const hashes = new BigUint64Array(total);
-  let i = 0;
-  let last = '';
-  for (;;) {
-    const { rows } = await pool.query(
-      `SELECT address FROM address_info WHERE ${where} AND address > $1 ORDER BY address LIMIT 200000`, [last]
-    );
-    if (!rows.length) break;
-    for (const r of rows) { if (i < total) hashes[i++] = h64(r.address); }
-    last = rows[rows.length - 1].address;
-    if (i % 1_000_000 < 200000) log(`  loaded ${i}/${total}`);
-  }
-  return new CandidateSet(i === total ? hashes : hashes.slice(0, i));
-}
-
 async function getState(key: string): Promise<string | null> {
   const { rows } = await pool.query('SELECT value FROM etl_state WHERE key = $1', [key]);
   return rows[0]?.value ?? null;
@@ -271,10 +221,9 @@ async function phaseScripts(): Promise<void> {
   if (to < from) { log(`  nothing to do (from ${from} > to ${to})`); return; }
   log(`  blocks ${from}..${to}${EXECUTE ? '' : ' (dry run: counting only)'}`);
 
-  const candidates = await loadCandidates();
   const concurrency = Math.max(1, config.etl.concurrency);
 
-  let hits = 0, hitSats = 0n, mixed = 0, inputsSeen = 0;
+  let hits = 0, hitSats = 0n, funded = 0, mixed = 0, inputsSeen = 0;
   const t0 = Date.now();
   let lastReport = t0;
 
@@ -285,44 +234,51 @@ async function phaseScripts(): Promise<void> {
     const blocks = await Promise.all(hashes.map(h => getBlock(h)));
 
     for (const block of blocks) {
+      // Same address, same script: whatever one spend reveals, every other
+      // spend reveals too, so the first key-bearing input per address is enough.
+      const revealed = new Map<string, Exposure>();
       for (const tx of block.tx) {
         if (tx.vin[0]?.coinbase !== undefined) continue;
         for (const vin of tx.vin) {
           const spk = vin.prevout?.scriptPubKey;
           if (!spk?.address || !SCRIPT_PREVOUT_TYPES.has(spk.type)) continue;
           inputsSeen++;
-          const idx = candidates.find(spk.address);
-          if (idx < 0) continue;
-          // Same address, same script: whatever this spend reveals, every
-          // other spend reveals too. One look is enough either way.
-          candidates.settle(idx);
+          if (revealed.has(spk.address)) continue;
           const exp = revealedKeysFromInput(vin);
-          if (!exp) continue;
-
-          // Confirm the hit (hash collision guard) and read the balance.
-          const { rows } = await pool.query(
-            'SELECT utxo_value_sats::text AS sats FROM address_info WHERE address = $1 AND pubkey_exposed = FALSE AND utxo_count > 0',
-            [spk.address]
-          );
-          if (!rows.length) continue;
+          if (exp) revealed.set(spk.address, exp);
+        }
+      }
+      if (revealed.size) {
+        // One lookup per block. Empty addresses are included on purpose: a
+        // later receipt is only flagged if the address is known as exposed.
+        const { rows } = await pool.query(
+          `SELECT address, utxo_count, utxo_value_sats::text AS sats
+           FROM address_info WHERE address = ANY($1::text[]) AND pubkey_exposed = FALSE`,
+          [[...revealed.keys()]]
+        );
+        for (const r of rows) {
+          const exp = revealed.get(r.address)!;
           hits++;
-          hitSats += BigInt(rows[0].sats);
+          if (Number(r.utxo_count) > 0) { funded++; hitSats += BigInt(r.sats); }
           if (exp.kind === 'script-mixed') mixed++;
+        }
 
-          if (EXECUTE) {
-            const client = await pool.connect();
-            try {
-              await client.query('BEGIN');
+        if (EXECUTE && rows.length) {
+          const client = await pool.connect();
+          try {
+            await client.query('BEGIN');
+            for (const r of rows) {
+              const exp = revealed.get(r.address)!;
               const keys = exp.keys.join(',');
-              await markAddr(client, spk.address, keys, block.height, exp.kind);
-              await markUtxos(client, spk.address, keys, exposureRule(exp.kind));
-              await client.query('COMMIT');
-            } catch (err) {
-              await client.query('ROLLBACK');
-              throw err;
-            } finally {
-              client.release();
+              await markAddr(client, r.address, keys, block.height, exp.kind);
+              if (Number(r.utxo_count) > 0) await markUtxos(client, r.address, keys, exposureRule(exp.kind));
             }
+            await client.query('COMMIT');
+          } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+          } finally {
+            client.release();
           }
         }
       }
@@ -331,7 +287,7 @@ async function phaseScripts(): Promise<void> {
       if (now - lastReport > 60_000) {
         const rate = (block.height - from + 1) / ((now - t0) / 1000);
         const eta = rate > 0 ? Math.round((to - block.height) / rate / 60) : NaN;
-        log(`  block ${block.height}/${to} | script inputs ${inputsSeen} | hits ${hits} (${btc(hitSats)} BTC, ${mixed} mixed) | eta ${eta}m`);
+        log(`  block ${block.height}/${to} | script inputs ${inputsSeen} | addresses ${hits} (${funded} funded, ${btc(hitSats)} BTC, ${mixed} mixed) | eta ${eta}m`);
         lastReport = now;
       }
     }
@@ -340,7 +296,7 @@ async function phaseScripts(): Promise<void> {
     if (EXECUTE) await setState(PROGRESS_KEY, String(current));
   }
 
-  log(`  done: ${hits} addresses, ${btc(hitSats)} BTC${EXECUTE ? ' flagged' : ' would be flagged'}; ${mixed} mixed-script`);
+  log(`  done: ${hits} addresses (${funded} funded, ${btc(hitSats)} BTC)${EXECUTE ? ' marked' : ' would be marked'}; ${mixed} mixed-script`);
 }
 
 // ---------------------------------------------------------------------------

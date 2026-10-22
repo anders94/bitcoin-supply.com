@@ -52,14 +52,19 @@ homepage (UTXO-level): 5,900,844 vs 3,575,929 BTC. Step 1 reconciles them.
 * `address_info.exposure_kind` (migration 008) records how the address was
   exposed: p2pk, p2tr, p2ms, pkh, script, script-mixed.
 * Backfill phase `scripts`: the database keeps no spent inputs, so this is a
-  chain walk over RPC restricted to P2SH/P2WSH inputs whose address still has
-  a balance. Resumable via etl_state. This is the long pole (days).
+  chain walk over RPC over P2SH/P2WSH inputs, one address lookup per block.
+  Every not-yet-exposed address is marked, including empty ones: an address
+  emptied before the walk and refilled later must already be known as exposed,
+  or the ETL's receipt check cannot flag the new coin. Resumable via etl_state.
+  This is the long pole (days).
 
 ## Step 5 — Reporting
 
-* Snapshots split by script type: quantum_p2pk, quantum_p2tr, quantum_p2ms,
-  quantum_exposed_pkh, quantum_exposed_script, quantum_all_exposed. Bucket-1
-  rows are excluded from every quantum figure.
+* Snapshots split by how the key became public: quantum_p2pk, quantum_p2tr,
+  quantum_p2ms, quantum_exposed_pkh (incl. P2SH-P2WPKH, rule 016),
+  quantum_exposed_script (rule 021), quantum_all_exposed. Only spendable rows
+  (buckets 0 / 4) count: provably-lost and NUMS-key (018) rows are excluded
+  from every quantum figure.
 * Homepage note, /quantum page, address page, API and README state exactly
   what is counted and what the mixed-script caveat means.
 
@@ -73,7 +78,7 @@ homepage (UTXO-level): 5,900,844 vs 3,575,929 BTC. Step 1 reconciles them.
 
 1. `npm run migrate` (adds address_info.exposure_kind; metadata-only).
 2. Deploy ETL + web.
-3. `npx tsx scripts/backfill-quantum-exposure.ts --phase fix,receipts,p2tr,p2ms --execute`
+3. `npx tsx scripts/backfill-quantum-exposure.ts --phase fix,kinds,receipts,p2tr,p2ms --execute`
 4. `npx tsx scripts/backfill-quantum-exposure.ts --phase scripts --execute`
    (chain walk; resumable; run until it reaches the block the new ETL started at).
 5. `npm run snapshot`, then compare /quantum against the Project Eleven line.

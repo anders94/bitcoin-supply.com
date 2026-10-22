@@ -44,8 +44,8 @@ export async function deleteUtxo(client: PoolClient, txHash: string, outputIndex
 // A spend from `address` has revealed its key(s): everything still sitting at
 // the address is exposed. `rule` is 016 (P2PKH / P2WPKH key) or 021 (keys in
 // a revealed P2SH / P2WSH script). The rule is only recorded on otherwise
-// active outputs (bucket 0); the flag is set regardless, since the key is
-// known either way. Provably-lost rows (bucket 1) have no key to break.
+// active outputs (bucket 0); the flag is set on any spendable row (0 / 4).
+// Lost rows (buckets 1 / 2) are left alone, per the 016 / 018 convention.
 export async function markAddressPubkeyExposed(
   client: PoolClient, address: string, pubkeyHex: string, rule: '016' | '021'
 ): Promise<void> {
@@ -57,7 +57,7 @@ export async function markAddressPubkeyExposed(
           WHEN NOT (loss_rules @> ARRAY[$3]::text[]) AND loss_bucket = 0 THEN array_append(loss_rules, $3)
           ELSE loss_rules
         END
-    WHERE address = $1 AND pubkey_exposed = FALSE AND loss_bucket <> 1
+    WHERE address = $1 AND pubkey_exposed = FALSE AND loss_bucket IN (0, 4)
   `, [address, pubkeyHex, rule]);
 }
 
@@ -77,6 +77,6 @@ export async function flagUtxoExposed(
           ELSE loss_rules
         END
     WHERE tx_hash = $1 AND output_index = $2 AND block_number = $3
-      AND pubkey_exposed = FALSE AND loss_bucket <> 1
+      AND pubkey_exposed = FALSE AND loss_bucket IN (0, 4)
   `, [txHash, outputIndex, blockNumber, pubkeyHex, rule]);
 }
