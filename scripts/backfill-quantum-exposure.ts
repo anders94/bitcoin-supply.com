@@ -41,7 +41,6 @@ import { pool } from '../src/db/index.js';
 import { config } from '../src/config.js';
 import { getBlockHash, getBlock } from '../src/services/bitcoin-rpc.js';
 import { exposedKeysInOutput, revealedKeysFromInput, exposureRule, Exposure } from '../src/classifiers/exposure.js';
-import { markAddressPubkeyExposed as markAddr } from '../src/db/address-info.js';
 import { markAddressPubkeyExposed as markUtxos } from '../src/db/utxos.js';
 
 const args = process.argv.slice(2);
@@ -372,11 +371,22 @@ async function phaseScripts(): Promise<void> {
             const client = await pool.connect();
             try {
               await client.query('BEGIN');
+              // All of the block's addresses in one statement (~hundreds per
+              // block, nearly all empty); same SET as markAddressPubkeyExposed.
+              const addrs = rows.map(r => r.address as string);
+              const exps = addrs.map(a => revealed.get(a)!);
+              await client.query(`
+                UPDATE address_info ai
+                SET pubkey_hex = v.keys, pubkey_exposed_at_block = $4, pubkey_exposed = TRUE,
+                    exposure_kind = COALESCE(ai.exposure_kind, v.kind), updated_at = now()
+                FROM unnest($1::text[], $2::text[], $3::text[]) AS v(address, keys, kind)
+                WHERE ai.address = v.address AND ai.pubkey_hex IS NULL
+              `, [addrs, exps.map(e => e.keys.join(',')), exps.map(e => e.kind), block.height]);
+              // UTXO rows only exist at funded addresses.
               for (const r of rows) {
+                if (Number(r.utxo_count) === 0) continue;
                 const exp = revealed.get(r.address)!;
-                const keys = exp.keys.join(',');
-                await markAddr(client, r.address, keys, block.height, exp.kind);
-                if (Number(r.utxo_count) > 0) await markUtxos(client, r.address, keys, exposureRule(exp.kind));
+                await markUtxos(client, r.address, exp.keys.join(','), exposureRule(exp.kind));
               }
               await client.query('COMMIT');
             } catch (err) {
