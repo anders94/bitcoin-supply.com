@@ -113,9 +113,11 @@ export function exposedKeysInOutput(scriptHex: string): Exposure | null {
 
   const ms = parseMultisigScript(hex);
   if (ms) {
-    const keys = uniq(ms.pubkeys.filter(isValidPubkey));
+    const valid = ms.pubkeys.filter(isValidPubkey);
     // Fewer than M real keys is Proposal 006 (unspendable), not exposure.
-    return keys.length >= ms.m ? { kind: 'p2ms', keys } : null;
+    // Counted before de-duplicating: a 2-of-2 listing one key twice is
+    // spendable with two signatures from that key.
+    return valid.length >= ms.m ? { kind: 'p2ms', keys: uniq(valid) } : null;
   }
   return null;
 }
