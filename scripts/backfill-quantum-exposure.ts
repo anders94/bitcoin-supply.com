@@ -61,6 +61,25 @@ const EPOCHS: [number, number][] = [
 const btc = (sats: bigint | string | number) => (Number(sats) / 1e8).toFixed(8);
 const log = (s: string) => console.log(`[${new Date().toISOString().slice(11, 19)}] ${s}`);
 
+const TAPROOT_ACTIVATION = 709_632;
+const P2TR_BATCH_PAGES = 50_000;   // ~400 MB of heap per transaction
+const ADDRESS_BATCH = 20_000;
+
+// The live ETL updates the same rows in its own order, so a write here can
+// lose a deadlock (40P01). Postgres rolls back only the losing statement;
+// retrying it is safe because every write in this script is idempotent.
+async function withDeadlockRetry<T>(fn: () => Promise<T>, attempts = 8): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      if (err?.code !== '40P01' || i >= attempts) throw err;
+      log(`  deadlock with a concurrent writer, retrying (${i}/${attempts - 1})`);
+      await new Promise(r => setTimeout(r, 1000 * i));
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // fix: off-curve P2PK rows carry no breakable key
 // ---------------------------------------------------------------------------
@@ -177,34 +196,77 @@ async function phaseP2tr(): Promise<void> {
   `);
   log(`  ${rows[0].n} rows, ${btc(rows[0].sats)} BTC`);
   if (!EXECUTE) return;
-  for (const [lo, hi] of EPOCHS) {
-    if (hi <= 709_632) continue; // taproot activation
-    const res = await pool.query(`
-      UPDATE utxos
-      SET pubkey_exposed = loss_bucket <> 2,  -- NUMS output keys (018) stay unflagged
-          pubkey_hex = CASE WHEN loss_bucket <> 2 THEN substr(script_hex, 5, 64) END,
-          loss_rules = array_append(loss_rules, '019'),
-          loss_bucket = CASE WHEN loss_bucket = 0 THEN 4 ELSE loss_bucket END
-      WHERE script_type = 'witness_v1_taproot' AND loss_bucket <> 1 AND NOT loss_rules @> '{019}'
-        AND block_number >= $1 AND block_number < $2
-    `, [lo, hi]);
-    log(`  epoch ${lo}-${hi}: tagged ${res.rowCount}`);
+
+  // Short transactions: a single UPDATE over a whole partition deadlocks with
+  // the live ETL, which touches the same rows in its own order. Batches are
+  // physical page ranges (TID range scan), so the partition is still read only
+  // once in total; block_number has no index usable for bucket-0 rows, so
+  // block ranges would seq-scan the partition per batch. A batch that loses a
+  // deadlock is retried. Rows the ETL inserts meanwhile it tags itself.
+  let tagged = 0;
+  for (const [i, [, hi]] of EPOCHS.entries()) {
+    if (hi <= TAPROOT_ACTIVATION) continue;
+    const part = `utxos_epoch_${i}`;
+    const { rows: [{ pages }] } = await pool.query(
+      `SELECT (pg_relation_size($1::regclass) / current_setting('block_size')::int)::int AS pages`, [part]
+    );
+    for (let page = 0; page < pages; page += P2TR_BATCH_PAGES) {
+      const res = await withDeadlockRetry(() => pool.query(`
+        UPDATE ${part}
+        SET pubkey_exposed = loss_bucket <> 2,  -- NUMS output keys (018) stay unflagged
+            pubkey_hex = CASE WHEN loss_bucket <> 2 THEN substr(script_hex, 5, 64) END,
+            loss_rules = array_append(loss_rules, '019'),
+            loss_bucket = CASE WHEN loss_bucket = 0 THEN 4 ELSE loss_bucket END
+        WHERE ctid >= $1::tid AND ctid < $2::tid
+          AND script_type = 'witness_v1_taproot' AND loss_bucket <> 1 AND NOT loss_rules @> '{019}'
+      `, [`(${page},0)`, `(${page + P2TR_BATCH_PAGES},0)`]));
+      tagged += res.rowCount ?? 0;
+      if ((page / P2TR_BATCH_PAGES) % 20 === 19 || page + P2TR_BATCH_PAGES >= pages) {
+        log(`  ${part} page ${Math.min(page + P2TR_BATCH_PAGES, pages)}/${pages}: tagged ${tagged}`);
+      }
+    }
   }
-  // Address level. Overwrites any earlier mislabel: the old input heuristic
-  // could read a taproot script-path control block as a "pubkey".
-  const res = await pool.query(`
-    UPDATE address_info ai
-    SET pubkey_exposed = TRUE, exposure_kind = 'p2tr', is_p2pk = FALSE,
-        pubkey_hex = t.x, updated_at = now()
-    FROM (
+
+  // Address level, batched for the same reason. Overwrites any earlier
+  // mislabel: the old input heuristic could read a taproot script-path
+  // control block as a "pubkey". Temp table, so one dedicated client.
+  const client = await pool.connect();
+  try {
+    log('  collecting taproot addresses');
+    await client.query(`
+      CREATE TEMP TABLE p2tr_addrs AS
       SELECT address, MIN(pubkey_hex) AS x
       FROM utxos WHERE script_type = 'witness_v1_taproot' AND loss_rules @> '{019}' AND pubkey_exposed
         AND address IS NOT NULL
       GROUP BY address
-    ) t
-    WHERE ai.address = t.address AND ai.exposure_kind IS DISTINCT FROM 'p2tr'
-  `);
-  log(`  address_info: ${res.rowCount} taproot addresses marked`);
+    `);
+    await client.query('CREATE UNIQUE INDEX ON p2tr_addrs (address)');
+    await client.query('ANALYZE p2tr_addrs');
+    let last = '', marked = 0, batches = 0;
+    for (;;) {
+      const { rows: b } = await client.query(
+        'SELECT address FROM p2tr_addrs WHERE address > $1 ORDER BY address OFFSET $2 LIMIT 1',
+        [last, ADDRESS_BATCH - 1]
+      );
+      const upto: string | null = b[0]?.address ?? null;  // null: final partial batch
+      const res = await withDeadlockRetry(() => client.query(`
+        UPDATE address_info ai
+        SET pubkey_exposed = TRUE, exposure_kind = 'p2tr', is_p2pk = FALSE,
+            pubkey_hex = t.x, updated_at = now()
+        FROM p2tr_addrs t
+        WHERE ai.address = t.address AND ai.exposure_kind IS DISTINCT FROM 'p2tr'
+          AND t.address > $1 AND ($2::text IS NULL OR t.address <= $2)
+      `, [last, upto]));
+      marked += res.rowCount ?? 0;
+      if (++batches % 100 === 0) log(`  address_info: ${marked} marked so far`);
+      if (upto === null) break;
+      last = upto;
+    }
+    log(`  address_info: ${marked} taproot addresses marked`);
+  } finally {
+    await client.query('DROP TABLE IF EXISTS p2tr_addrs').catch(() => {});
+    client.release();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -224,13 +286,13 @@ async function phaseP2ms(): Promise<void> {
   if (!EXECUTE) return;
   let n = 0;
   for (const r of targets) {
-    const res = await pool.query(`
+    const res = await withDeadlockRetry(() => pool.query(`
       UPDATE utxos
       SET pubkey_exposed = TRUE, pubkey_hex = $4,
           loss_rules = array_append(loss_rules, '020'),
           loss_bucket = CASE WHEN loss_bucket = 0 THEN 4 ELSE loss_bucket END
       WHERE tx_hash = $1 AND output_index = $2 AND block_number = $3 AND NOT loss_rules @> '{020}'
-    `, [r.tx_hash, r.output_index, r.block_number, r.exp!.keys.join(',')]);
+    `, [r.tx_hash, r.output_index, r.block_number, r.exp!.keys.join(',')]));
     n += res.rowCount ?? 0;
   }
   log(`  tagged ${n}`);
