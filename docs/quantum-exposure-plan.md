@@ -78,7 +78,9 @@ homepage (UTXO-level): 5,900,844 vs 3,575,929 BTC. Step 1 reconciles them.
 
 1. `npm run migrate` (adds address_info.exposure_kind; metadata-only).
 2. Deploy ETL + web.
-3. `npx tsx scripts/backfill-quantum-exposure.ts --phase fix,kinds,receipts,p2tr,p2ms --execute`
+3. `npx tsx scripts/backfill-quantum-exposure.ts --phase fix,receipts,p2tr,p2ms --execute`
+   (skip `kinds`: readers already fall back to is_p2pk for NULL kinds, and it
+   would rewrite ~1.3B address_info rows)
 4. `npx tsx scripts/backfill-quantum-exposure.ts --phase scripts --execute`
    (chain walk; resumable; run until it reaches the block the new ETL started at).
 5. `npm run snapshot`, then compare /quantum against the Project Eleven line.

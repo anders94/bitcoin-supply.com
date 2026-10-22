@@ -9,7 +9,10 @@
 //             have no private key to derive and NUMS keys (018), which the
 //             quantum lens leaves out by convention.
 //   kinds     Fill address_info.exposure_kind for rows written before
-//             migration 008 (p2pk if is_p2pk, else pkh).
+//             migration 008 (p2pk if is_p2pk, else pkh). Optional and NOT in
+//             the default set: every reader already falls back to exactly
+//             this, and it rewrites ~1.3B rows of a 500 GB table in one
+//             statement (hours, heavy bloat, row locks the live ETL waits on).
 //   receipts  Flag UTXOs received at an address *after* its key was revealed
 //             (016 / 021). The largest single correction, ~2.3M BTC.
 //   p2tr      Proposal 019: every on-curve taproot output, plus address_info.
@@ -47,7 +50,7 @@ const argValue = (flag: string): string | undefined => {
   const i = args.indexOf(flag);
   return i >= 0 ? args[i + 1] : undefined;
 };
-const PHASES = (argValue('--phase') ?? 'fix,kinds,receipts,p2tr,p2ms').split(',').map(s => s.trim());
+const PHASES = (argValue('--phase') ?? 'fix,receipts,p2tr,p2ms').split(',').map(s => s.trim());
 
 // utxos is partitioned by halving epoch; one statement per partition keeps
 // each transaction (and its WAL) bounded.
