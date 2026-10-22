@@ -101,28 +101,65 @@ async function phaseKinds(): Promise<void> {
 // ---------------------------------------------------------------------------
 async function phaseReceipts(): Promise<void> {
   log('phase receipts: unflagged UTXOs at exposed addresses');
-  const { rows } = await pool.query(`
-    SELECT COUNT(*)::text AS n, COALESCE(SUM(u.value_sats), 0)::text AS sats
-    FROM utxos u JOIN address_info ai ON ai.address = u.address
-    WHERE ai.pubkey_exposed AND NOT u.pubkey_exposed AND u.loss_bucket IN (0, 4)
-  `);
-  log(`  ${rows[0].n} rows, ${btc(rows[0].sats)} BTC`);
-  if (!EXECUTE) return;
-  for (const [lo, hi] of EPOCHS) {
-    const res = await pool.query(`
-      UPDATE utxos u
-      SET pubkey_exposed = TRUE,
-          pubkey_hex = COALESCE(ai.pubkey_hex, u.pubkey_hex),
-          loss_rules = CASE
-            WHEN u.loss_bucket = 0 AND NOT u.loss_rules @> ARRAY[k.rule] THEN array_append(u.loss_rules, k.rule)
-            ELSE u.loss_rules END
-      FROM address_info ai,
-           LATERAL (SELECT CASE WHEN ai.exposure_kind IN ('script', 'script-mixed') THEN '021' ELSE '016' END AS rule) k
-      WHERE ai.address = u.address AND ai.pubkey_exposed
-        AND NOT u.pubkey_exposed AND u.loss_bucket IN (0, 4)
-        AND u.block_number >= $1 AND u.block_number < $2
-    `, [lo, hi]);
-    log(`  epoch ${lo}-${hi}: flagged ${res.rowCount}`);
+  // address_info is ~1.5B rows / 500 GB, so it is scanned exactly once: the
+  // exposed addresses that still have unflagged UTXOs go into a temp table,
+  // and each partition's UPDATE joins against that instead. Temp tables are
+  // per-session, hence one dedicated client. Anything exposed or received
+  // after the snapshot is taken is the live ETL's to flag.
+  const client = await pool.connect();
+  try {
+    // Materialised first so the planner sees the real address count: its
+    // n_distinct estimate for utxos.address is ~100x low, which makes it pick
+    // tens of millions of index probes into address_info over one scan.
+    log('  collecting addresses with unflagged UTXOs');
+    await client.query(`
+      CREATE TEMP TABLE receipt_candidates AS
+      SELECT DISTINCT address FROM utxos
+      WHERE NOT pubkey_exposed AND loss_bucket IN (0, 4) AND address IS NOT NULL
+    `);
+    await client.query('ANALYZE receipt_candidates');
+
+    log('  matching against exposed addresses (one address_info scan)');
+    await client.query('SET enable_nestloop = off');
+    await client.query(`
+      CREATE TEMP TABLE receipt_targets AS
+      SELECT ai.address, ai.pubkey_hex,
+             CASE WHEN ai.exposure_kind IN ('script', 'script-mixed') THEN '021' ELSE '016' END AS rule
+      FROM address_info ai JOIN receipt_candidates c ON c.address = ai.address
+      WHERE ai.pubkey_exposed
+    `);
+    await client.query('RESET enable_nestloop');
+    await client.query('DROP TABLE receipt_candidates');
+    await client.query('CREATE UNIQUE INDEX ON receipt_targets (address)');
+    await client.query('ANALYZE receipt_targets');
+
+    const { rows } = await client.query(`
+      SELECT (SELECT COUNT(*) FROM receipt_targets)::text AS addrs,
+             COUNT(*)::text AS n, COALESCE(SUM(u.value_sats), 0)::text AS sats
+      FROM utxos u JOIN receipt_targets t ON t.address = u.address
+      WHERE NOT u.pubkey_exposed AND u.loss_bucket IN (0, 4)
+    `);
+    log(`  ${rows[0].addrs} addresses, ${rows[0].n} rows, ${btc(rows[0].sats)} BTC`);
+    if (!EXECUTE) return;
+
+    for (const [lo, hi] of EPOCHS) {
+      const res = await client.query(`
+        UPDATE utxos u
+        SET pubkey_exposed = TRUE,
+            pubkey_hex = COALESCE(t.pubkey_hex, u.pubkey_hex),
+            loss_rules = CASE
+              WHEN u.loss_bucket = 0 AND NOT u.loss_rules @> ARRAY[t.rule] THEN array_append(u.loss_rules, t.rule)
+              ELSE u.loss_rules END
+        FROM receipt_targets t
+        WHERE t.address = u.address
+          AND NOT u.pubkey_exposed AND u.loss_bucket IN (0, 4)
+          AND u.block_number >= $1 AND u.block_number < $2
+      `, [lo, hi]);
+      log(`  epoch ${lo}-${hi}: flagged ${res.rowCount}`);
+    }
+  } finally {
+    await client.query('DROP TABLE IF EXISTS receipt_candidates, receipt_targets').catch(() => {});
+    client.release();
   }
 }
 
