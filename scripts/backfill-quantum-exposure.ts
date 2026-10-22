@@ -366,22 +366,26 @@ async function phaseScripts(): Promise<void> {
         }
 
         if (EXECUTE && rows.length) {
-          const client = await pool.connect();
-          try {
-            await client.query('BEGIN');
-            for (const r of rows) {
-              const exp = revealed.get(r.address)!;
-              const keys = exp.keys.join(',');
-              await markAddr(client, r.address, keys, block.height, exp.kind);
-              if (Number(r.utxo_count) > 0) await markUtxos(client, r.address, keys, exposureRule(exp.kind));
+          // The whole block's marks commit together; on a lost deadlock the
+          // transaction is rolled back and replayed (all writes idempotent).
+          await withDeadlockRetry(async () => {
+            const client = await pool.connect();
+            try {
+              await client.query('BEGIN');
+              for (const r of rows) {
+                const exp = revealed.get(r.address)!;
+                const keys = exp.keys.join(',');
+                await markAddr(client, r.address, keys, block.height, exp.kind);
+                if (Number(r.utxo_count) > 0) await markUtxos(client, r.address, keys, exposureRule(exp.kind));
+              }
+              await client.query('COMMIT');
+            } catch (err) {
+              await client.query('ROLLBACK');
+              throw err;
+            } finally {
+              client.release();
             }
-            await client.query('COMMIT');
-          } catch (err) {
-            await client.query('ROLLBACK');
-            throw err;
-          } finally {
-            client.release();
-          }
+          });
         }
       }
 
