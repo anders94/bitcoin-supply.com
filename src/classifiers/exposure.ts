@@ -4,10 +4,11 @@
 // Shared by the ETL (block-processor) and the one-off backfill so the two can
 // never disagree about what counts as exposed.
 
+import { createHash } from 'node:crypto';
 import { isOnSecp256k1Curve, parseMultisigScript, SECP256K1_P, modpow } from './proposals-000-011.js';
 
 // How an address's key(s) became visible. Mirrors address_info.exposure_kind.
-export type ExposureKind = 'p2pk' | 'p2tr' | 'p2ms' | 'pkh' | 'script' | 'script-mixed';
+export type ExposureKind = 'p2pk' | 'p2tr' | 'p2ms' | 'pkh' | 'script' | 'script-mixed' | 'reuse';
 
 export interface Exposure {
   kind: ExposureKind;
@@ -16,8 +17,11 @@ export interface Exposure {
   keys: string[];
 }
 
+export type ExposureRule = '016' | '021' | '022';
+
 // Rule attached to a UTXO flagged because its address's keys are known.
-export function exposureRule(kind: ExposureKind): '016' | '021' {
+export function exposureRule(kind: ExposureKind): ExposureRule {
+  if (kind === 'reuse') return '022';
   return kind === 'script' || kind === 'script-mixed' ? '021' : '016';
 }
 
@@ -189,4 +193,91 @@ export function revealedKeysFromInput(vin: any): Exposure | null {
     default:
       return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Sibling addresses of a known key (Proposal 022)
+// ---------------------------------------------------------------------------
+
+const sha256 = (b: Buffer): Buffer => createHash('sha256').update(b).digest();
+export const hash160 = (b: Buffer): Buffer => createHash('ripemd160').update(sha256(b)).digest();
+
+export interface KeyHashes {
+  key: string;      // the encoding hashed (hex)
+  h160: Buffer;     // P2PKH / P2WPKH program
+  p2shH160: Buffer; // P2SH-P2WPKH: HASH160(0014 <h160>)
+}
+
+const P2WPKH_PREFIX = Buffer.from('0014', 'hex');
+
+// The encodings of a key that single-key address types commit to. An
+// uncompressed key also yields its compressed form (the parity of y is right
+// there); the reverse needs a modular square root, and no wallet pays the
+// uncompressed addresses of a key it uses compressed.
+export function keyHashes(keyHex: string): KeyHashes[] {
+  const hex = keyHex.toLowerCase();
+  const encodings: string[] = [];
+  if (hex.length === 130 && hex.startsWith('04')) {
+    const odd = parseInt(hex.slice(128, 130), 16) & 1;
+    encodings.push(hex, (odd ? '03' : '02') + hex.slice(2, 66));
+  } else if (hex.length === 66 && (hex.startsWith('02') || hex.startsWith('03'))) {
+    encodings.push(hex);
+  }
+  return encodings.map(key => {
+    const h160 = hash160(Buffer.from(key, 'hex'));
+    return { key, h160, p2shH160: hash160(Buffer.concat([P2WPKH_PREFIX, h160])) };
+  });
+}
+
+const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+export function base58check(version: number, payload: Buffer): string {
+  const body = Buffer.concat([Buffer.from([version]), payload]);
+  const buf = Buffer.concat([body, sha256(sha256(body)).subarray(0, 4)]);
+  let n = BigInt('0x' + buf.toString('hex'));
+  let s = '';
+  while (n > 0n) { s = B58[Number(n % 58n)] + s; n /= 58n; }
+  for (const byte of buf) { if (byte !== 0) break; s = '1' + s; }
+  return s;
+}
+
+const BECH32 = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+
+function bech32Polymod(values: number[]): number {
+  const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+  let chk = 1;
+  for (const v of values) {
+    const top = chk >> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ v;
+    for (let i = 0; i < 5; i++) if ((top >> i) & 1) chk ^= GEN[i];
+  }
+  return chk;
+}
+
+// Segwit v0 address (bech32, BIP-173). v1+ uses bech32m and is not needed here.
+export function segwitV0Address(program: Buffer, hrp = 'bc'): string {
+  const data = [0];
+  let acc = 0, bits = 0;
+  for (const byte of program) {
+    acc = (acc << 8) | byte; bits += 8;
+    while (bits >= 5) { bits -= 5; data.push((acc >> bits) & 31); }
+  }
+  if (bits) data.push((acc << (5 - bits)) & 31);
+  const hrpExpanded = [...hrp].map(c => c.charCodeAt(0) >> 5)
+    .concat([0], [...hrp].map(c => c.charCodeAt(0) & 31));
+  const mod = bech32Polymod(hrpExpanded.concat(data, [0, 0, 0, 0, 0, 0])) ^ 1;
+  const checksum = [0, 1, 2, 3, 4, 5].map(i => (mod >> (5 * (5 - i))) & 31);
+  return hrp + '1' + data.concat(checksum).map(i => BECH32[i]).join('');
+}
+
+export interface SiblingAddress { address: string; key: string; }
+
+// Every single-key address a key controls: P2PKH, P2WPKH and P2SH-P2WPKH for
+// each encoding from keyHashes(). Includes whichever one the key was seen at.
+export function siblingAddresses(keyHex: string): SiblingAddress[] {
+  return keyHashes(keyHex).flatMap(({ key, h160, p2shH160 }) => [
+    { address: base58check(0x00, h160), key },
+    { address: segwitV0Address(h160), key },
+    { address: base58check(0x05, p2shH160), key },
+  ]);
 }

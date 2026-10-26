@@ -65,6 +65,7 @@ async function supplyScan(tipBlock: number, tipTs: Date): Promise<void> {
     SELECT loss_bucket, pubkey_exposed,
            -- How the key became public. By rule, not script_type, for spends:
            -- a P2SH-P2WPKH spend reveals one key (016), not a script (021).
+           -- Key reuse (022) is single-key outputs, so it counts as pkh.
            CASE WHEN NOT pubkey_exposed THEN NULL
                 WHEN script_type = 'pubkey' THEN 'p2pk'
                 WHEN script_type = 'witness_v1_taproot' THEN 'p2tr'

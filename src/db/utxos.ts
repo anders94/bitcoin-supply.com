@@ -1,4 +1,5 @@
 import { PoolClient } from 'pg';
+import type { ExposureRule } from '../classifiers/exposure.js';
 
 export interface UtxoRecord {
   tx_hash: string;
@@ -42,12 +43,13 @@ export async function deleteUtxo(client: PoolClient, txHash: string, outputIndex
 }
 
 // A spend from `address` has revealed its key(s): everything still sitting at
-// the address is exposed. `rule` is 016 (P2PKH / P2WPKH key) or 021 (keys in
-// a revealed P2SH / P2WSH script). The rule is only recorded on otherwise
-// active outputs (bucket 0); the flag is set on any spendable row (0 / 4).
+// the address is exposed. `rule` is 016 (P2PKH / P2WPKH key), 021 (keys in
+// a revealed P2SH / P2WSH script) or 022 (the same key, seen at another of its
+// addresses). The rule is only recorded on otherwise active outputs (bucket
+// 0); the flag is set on any spendable row (0 / 4).
 // Lost rows (buckets 1 / 2) are left alone, per the 016 / 018 convention.
 export async function markAddressPubkeyExposed(
-  client: PoolClient, address: string, pubkeyHex: string, rule: '016' | '021'
+  client: PoolClient, address: string, pubkeyHex: string, rule: ExposureRule
 ): Promise<void> {
   await client.query(`
     UPDATE utxos
@@ -66,7 +68,7 @@ export async function markAddressPubkeyExposed(
 export async function flagUtxoExposed(
   client: PoolClient,
   txHash: string, outputIndex: number, blockNumber: number,
-  pubkeyHex: string | null, rule: '016' | '021'
+  pubkeyHex: string | null, rule: ExposureRule
 ): Promise<void> {
   await client.query(`
     UPDATE utxos

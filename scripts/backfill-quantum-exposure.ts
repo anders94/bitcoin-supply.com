@@ -24,11 +24,21 @@
 //             known as exposed, or the ETL cannot flag the receipt. Resumable:
 //             progress is kept in etl_state under 'backfill_021_next_block'.
 //             Run it on the ETL box.
+//   siblings  Proposal 022: a known key also exposes its other single-key
+//             addresses (P2PKH / P2WPKH / P2SH-P2WPKH, compressed and, for
+//             uncompressed keys, uncompressed). Two sequential passes over
+//             address_info: collect every unexposed address, then derive the
+//             siblings of every known key and match in memory; only matches
+//             touch the database. Marks empty addresses too, so later receipts
+//             are flagged by the ETL. A few hours; DB only. Pass 2 resumes via
+//             etl_state 'backfill_022_next_page'. Re-runnable to pick up
+//             siblings first funded after their key was revealed.
 //
 // Usage:
 //   npx tsx scripts/backfill-quantum-exposure.ts                      # dry run, SQL phases
 //   npx tsx scripts/backfill-quantum-exposure.ts --execute
 //   npx tsx scripts/backfill-quantum-exposure.ts --phase scripts --execute [--from N] [--to N]
+//   npx tsx scripts/backfill-quantum-exposure.ts --phase siblings --execute
 //
 // Every phase is idempotent and safe to re-run; the live ETL may keep running
 // alongside (both sides only ever set flags that are not yet set).
@@ -40,7 +50,11 @@ import 'dotenv/config';
 import { pool } from '../src/db/index.js';
 import { config } from '../src/config.js';
 import { getBlockHash, getBlock } from '../src/services/bitcoin-rpc.js';
-import { exposedKeysInOutput, revealedKeysFromInput, exposureRule, Exposure } from '../src/classifiers/exposure.js';
+import {
+  exposedKeysInOutput, revealedKeysFromInput, exposureRule, Exposure,
+  keyHashes, base58check, segwitV0Address,
+} from '../src/classifiers/exposure.js';
+import { parseMultisigScript } from '../src/classifiers/proposals-000-011.js';
 import { markAddressPubkeyExposed as markUtxos } from '../src/db/utxos.js';
 
 const args = process.argv.slice(2);
@@ -416,12 +430,214 @@ async function phaseScripts(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// siblings: Proposal 022, a key's other single-key addresses
+// ---------------------------------------------------------------------------
+
+const SIBLING_BATCH_PAGES = 20_000;  // ~160 MB of address_info heap per query
+const SIBLING_PROGRESS_KEY = 'backfill_022_next_page';
+
+// 20-byte payload of a P2PKH / P2SH (base58) or P2WPKH (bech32 v0) address,
+// or null for any other kind. Checksums are not verified: these come from the
+// database, and a match is confirmed there before anything is written.
+function addressPayload(addr: string): Buffer | null {
+  if (addr.startsWith('bc1q')) {
+    if (addr.length !== 42) return null;  // P2WSH is 62
+    const out: number[] = [];
+    let acc = 0, bits = 0;
+    for (let i = 4; i < addr.length - 6; i++) {
+      const v = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'.indexOf(addr[i]);
+      if (v < 0) return null;
+      acc = (acc << 5) | v; bits += 5;
+      if (bits >= 8) { bits -= 8; out.push((acc >> bits) & 0xff); }
+    }
+    return out.length === 20 ? Buffer.from(out) : null;
+  }
+  if (addr[0] !== '1' && addr[0] !== '3') return null;
+  const bytes = new Uint8Array(25);
+  for (const ch of addr) {
+    let carry = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'.indexOf(ch);
+    if (carry < 0) return null;
+    for (let i = 24; i >= 0; i--) {
+      carry += bytes[i] * 58;
+      bytes[i] = carry & 0xff;
+      carry >>= 8;
+    }
+    if (carry) return null;  // longer than 25 bytes
+  }
+  return Buffer.from(bytes.subarray(1, 21));
+}
+
+// Sorted first-8-byte prefixes of every target payload: ~8 bytes per address
+// instead of a JS string, and a binary search per lookup.
+class PrefixSet {
+  private chunks: BigUint64Array[] = [];
+  private cur = new BigUint64Array(1 << 24);
+  private n = 0;
+  private sorted = new BigUint64Array(0);
+  add(payload: Buffer) {
+    if (this.n === this.cur.length) { this.chunks.push(this.cur); this.cur = new BigUint64Array(1 << 24); this.n = 0; }
+    this.cur[this.n++] = payload.readBigUInt64BE(0);
+  }
+  seal(): number {
+    const total = this.chunks.length * (1 << 24) + this.n;
+    this.sorted = new BigUint64Array(total);
+    let off = 0;
+    for (const c of this.chunks) { this.sorted.set(c, off); off += c.length; }
+    this.sorted.set(this.cur.subarray(0, this.n), off);
+    this.chunks = []; this.cur = new BigUint64Array(0);
+    this.sorted.sort();
+    return total;
+  }
+  has(payload: Buffer): boolean {
+    const x = payload.readBigUInt64BE(0);
+    let lo = 0, hi = this.sorted.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >>> 1;
+      const v = this.sorted[mid];
+      if (v === x) return true;
+      if (v < x) lo = mid + 1; else hi = mid - 1;
+    }
+    return false;
+  }
+}
+
+interface SiblingHit { address: string; key: string; block: number | null; }
+
+async function phaseSiblings(): Promise<void> {
+  log('phase siblings: other addresses of known keys (022)');
+  const { rows: [{ pages }] } = await pool.query(
+    `SELECT (pg_relation_size('address_info') / current_setting('block_size')::int)::int AS pages`
+  );
+
+  // Pass 1: every not-yet-exposed P2PKH / P2SH / P2WPKH address.
+  const targets = new PrefixSet();
+  for (let page = 0; page < pages; page += SIBLING_BATCH_PAGES) {
+    const { rows } = await pool.query(`
+      SELECT address FROM address_info
+      WHERE ctid >= $1::tid AND ctid < $2::tid AND pubkey_exposed = FALSE
+    `, [`(${page},0)`, `(${page + SIBLING_BATCH_PAGES},0)`]);
+    for (const r of rows) {
+      const p = addressPayload(r.address);
+      if (p) targets.add(p);
+    }
+    if ((page / SIBLING_BATCH_PAGES) % 200 === 199) log(`  pass 1: page ${page + SIBLING_BATCH_PAGES}/${pages}`);
+  }
+  log(`  pass 1: ${targets.seal()} unexposed single-key-type addresses`);
+
+  // Every candidate sibling of `keys` that is in the target set.
+  const match = (keys: string[], block: number | null, out: SiblingHit[]) => {
+    for (const k of keys) {
+      for (const { key, h160, p2shH160 } of keyHashes(k)) {
+        if (targets.has(h160)) {
+          out.push({ address: base58check(0x00, h160), key, block });
+          out.push({ address: segwitV0Address(h160), key, block });
+        }
+        if (targets.has(p2shH160)) out.push({ address: base58check(0x05, p2shH160), key, block });
+      }
+    }
+  };
+
+  let marked = 0, funded = 0, flagged = 0, fundedSats = 0n;
+  const apply = async (hits: SiblingHit[]) => {
+    if (hits.length === 0) return;
+    // Confirm against the database (prefix matches and address types are
+    // only candidates) and mark in one statement; first exposure wins.
+    const uniq = new Map(hits.map(h => [h.address, h]));
+    const hs = [...uniq.values()];
+    if (!EXECUTE) {
+      const { rows } = await pool.query(`
+        SELECT address, utxo_count, utxo_value_sats::text AS sats FROM address_info
+        WHERE address = ANY($1::text[]) AND pubkey_hex IS NULL
+      `, [hs.map(h => h.address)]);
+      for (const r of rows) {
+        marked++;
+        if (Number(r.utxo_count) > 0) { funded++; fundedSats += BigInt(r.sats); }
+      }
+      return;
+    }
+    await withDeadlockRetry(async () => {
+      const client = await pool.connect();
+      let m = 0, f = 0, fl = 0, sats = 0n;
+      try {
+        await client.query('BEGIN');
+        const { rows } = await client.query(`
+          UPDATE address_info ai
+          SET pubkey_hex = v.key, pubkey_exposed_at_block = v.block, pubkey_exposed = TRUE,
+              exposure_kind = COALESCE(ai.exposure_kind, 'reuse'), updated_at = now()
+          FROM unnest($1::text[], $2::text[], $3::int[]) AS v(address, key, block)
+          WHERE ai.address = v.address AND ai.pubkey_hex IS NULL
+          RETURNING ai.address, ai.utxo_count, ai.utxo_value_sats::text AS sats, v.key
+        `, [hs.map(h => h.address), hs.map(h => h.key), hs.map(h => h.block)]);
+        for (const r of rows) {
+          m++;
+          if (Number(r.utxo_count) === 0) continue;
+          f++; sats += BigInt(r.sats);
+          const res = await client.query(`
+            SELECT COUNT(*)::int AS n FROM utxos
+            WHERE address = $1 AND pubkey_exposed = FALSE AND loss_bucket IN (0, 4)
+          `, [r.address]);
+          fl += res.rows[0].n;
+          await markUtxos(client, r.address, r.key, '022');
+        }
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+      marked += m; funded += f; flagged += fl; fundedSats += sats;
+    });
+  };
+  const report = (where: string) =>
+    log(`  ${where} | addresses ${marked} (${funded} funded, ${btc(fundedSats)} BTC)${EXECUTE ? ` | coins flagged ${flagged}` : ''}`);
+
+  // Keys in output scripts: P2PK (015) and bare multisig (020) still unspent,
+  // plus the lost-bucket coinbase keys (genesis, BIP-30 duplicates), whose
+  // keys are valid even though those outputs can never move.
+  const { rows: inScript } = await pool.query(`
+    SELECT script_hex, MIN(block_number) AS block FROM utxos
+    WHERE script_type IN ('pubkey', 'multisig') AND loss_bucket IN (1, 4)
+    GROUP BY script_hex
+  `);
+  const scriptHits: SiblingHit[] = [];
+  for (const r of inScript) {
+    // On-curve keys only: off-curve "keys" (005 / 006) have no private key.
+    match(exposedKeysInOutput(r.script_hex)?.keys ?? [], Number(r.block), scriptHits);
+  }
+  await apply(scriptHits);
+  report(`output-script keys (${inScript.length} scripts)`);
+
+  // Pass 2: keys known from address_info (spends, and legacy P2PK rows).
+  // Taproot output keys have no siblings; 'reuse' rows repeat a key already
+  // handled at its source.
+  const start = EXECUTE ? Number((await getState(SIBLING_PROGRESS_KEY)) ?? 0) : 0;
+  if (start > 0) log(`  pass 2: resuming at page ${start}`);
+  for (let page = start; page < pages; page += SIBLING_BATCH_PAGES) {
+    const { rows } = await pool.query(`
+      SELECT pubkey_hex, pubkey_exposed_at_block AS block FROM address_info
+      WHERE ctid >= $1::tid AND ctid < $2::tid AND pubkey_exposed AND pubkey_hex IS NOT NULL
+        AND exposure_kind IS DISTINCT FROM 'p2tr' AND exposure_kind IS DISTINCT FROM 'reuse'
+    `, [`(${page},0)`, `(${page + SIBLING_BATCH_PAGES},0)`]);
+    const hits: SiblingHit[] = [];
+    for (const r of rows) match(r.pubkey_hex.split(','), r.block, hits);
+    await apply(hits);
+    if (EXECUTE) await setState(SIBLING_PROGRESS_KEY, String(page + SIBLING_BATCH_PAGES));
+    if ((page / SIBLING_BATCH_PAGES) % 100 === 99 || page + SIBLING_BATCH_PAGES >= pages) {
+      report(`pass 2: page ${Math.min(page + SIBLING_BATCH_PAGES, pages)}/${pages}`);
+    }
+  }
+  if (EXECUTE) await setState(SIBLING_PROGRESS_KEY, '0');  // a re-run starts over
+  log(`  done: ${marked} sibling addresses ${EXECUTE ? 'marked' : 'would be marked'}, ${funded} funded (${btc(fundedSats)} BTC)`);
+}
+
+// ---------------------------------------------------------------------------
 
 async function main() {
   log(`backfill-quantum-exposure: phases [${PHASES.join(', ')}] ${EXECUTE ? 'EXECUTE' : 'DRY RUN'}`);
   const runners: Record<string, () => Promise<void>> = {
     fix: phaseFix, kinds: phaseKinds, receipts: phaseReceipts,
-    p2tr: phaseP2tr, p2ms: phaseP2ms, scripts: phaseScripts,
+    p2tr: phaseP2tr, p2ms: phaseP2ms, scripts: phaseScripts, siblings: phaseSiblings,
   };
   for (const p of PHASES) {
     const run = runners[p];

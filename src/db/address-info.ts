@@ -1,5 +1,6 @@
 import { PoolClient } from 'pg';
-import type { ExposureKind } from '../classifiers/exposure.js';
+import { siblingAddresses, type ExposureKind } from '../classifiers/exposure.js';
+import { markAddressPubkeyExposed as markUtxosPubkey } from './utxos.js';
 
 export interface AddressExposure {
   pubkey_exposed: boolean;
@@ -50,19 +51,21 @@ export async function upsertAddressInfo(
 
 // A spend revealed the address's key(s). First exposure wins: the same address
 // always resolves to the same key or script, so a later spend adds nothing.
+// Returns true only on that first exposure, so the caller can follow up once.
 export async function markAddressPubkeyExposed(
   client: PoolClient,
   address: string,
   pubkeyHex: string,
   blockNumber: number,
   kind: ExposureKind
-): Promise<void> {
-  await client.query(`
+): Promise<boolean> {
+  const res = await client.query(`
     UPDATE address_info
     SET pubkey_hex = $2, pubkey_exposed_at_block = $3, pubkey_exposed = TRUE,
         exposure_kind = COALESCE(exposure_kind, $4), updated_at = now()
     WHERE address = $1 AND pubkey_hex IS NULL
   `, [address, pubkeyHex, blockNumber, kind]);
+  return (res.rowCount ?? 0) > 0;
 }
 
 // The address's output script carries its key(s) (P2PK, P2TR, bare multisig):
@@ -82,4 +85,30 @@ export async function markAddressKeyInScript(
         updated_at = now()
     WHERE address = $1 AND (pubkey_exposed = FALSE OR exposure_kind IS NULL OR pubkey_hex IS NULL)
   `, [address, kind, pubkeyHex]);
+}
+
+// Proposal 022: the key(s) just became known, so every other single-key
+// address they control is exposed too. Only addresses already in address_info
+// are marked (an address first funded later is left to the backfill sweep);
+// coins at the funded ones are flagged. The address where the key was seen is
+// already marked, so `pubkey_hex IS NULL` skips it.
+export async function markSiblingAddresses(
+  client: PoolClient,
+  keys: string[],
+  blockNumber: number
+): Promise<void> {
+  const siblings = new Map<string, string>();
+  for (const k of keys) for (const s of siblingAddresses(k)) siblings.set(s.address, s.key);
+  if (siblings.size === 0) return;
+  const { rows } = await client.query(`
+    UPDATE address_info ai
+    SET pubkey_hex = v.key, pubkey_exposed_at_block = $3, pubkey_exposed = TRUE,
+        exposure_kind = COALESCE(ai.exposure_kind, 'reuse'), updated_at = now()
+    FROM unnest($1::text[], $2::text[]) AS v(address, key)
+    WHERE ai.address = v.address AND ai.pubkey_hex IS NULL
+    RETURNING ai.address, ai.utxo_count, v.key
+  `, [[...siblings.keys()], [...siblings.values()], blockNumber]);
+  for (const r of rows) {
+    if (Number(r.utxo_count) > 0) await markUtxosPubkey(client, r.address, r.key, '022');
+  }
 }

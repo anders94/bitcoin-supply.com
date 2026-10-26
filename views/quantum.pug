@@ -18,7 +18,7 @@ block content
       span.k P2MS outputs — keys in script
       span.v--purple #{btc8(p2ms.sats)} BTC · #{num(p2ms.count)} utxos
     .row.row--dotted
-      span.k P2PKH / P2WPKH / P2SH-P2WPKH — key revealed by a spend
+      span.k P2PKH / P2WPKH / P2SH-P2WPKH — key revealed by a spend or at another address of the same key
       span.v--purple #{btc8(pkh.sats)} BTC#{pkh.present ? ' · ' + num(pkh.count) + ' utxos' : ''}
     .row.row--dotted
       span.k P2SH / P2WSH — script revealed by a spend
@@ -44,4 +44,4 @@ block content
           span.yr= num(a.utxo_count) + ' utxos'
           span.amt(style='font-weight:600')= btc8(a.balance)
 
-  .note--italic Not counted: outputs that are provably unspendable (off-curve keys have no private key to derive), outputs already counted as burned (NUMS keys), hashed outputs that have never spent, and revealed scripts with no key in them. A different cut through the same outputs — never added to the loss total. #[a(href='/', style='color:var(--secondary)') Sweep the capture on the homepage →] · Rules: #[a(href='/proposals/015', style='color:var(--secondary)') 015] #[a(href='/proposals/016', style='color:var(--secondary)') 016] #[a(href='/proposals/019', style='color:var(--secondary)') 019] #[a(href='/proposals/020', style='color:var(--secondary)') 020] #[a(href='/proposals/021', style='color:var(--secondary)') 021]
+  .note--italic Not counted: outputs that are provably unspendable (off-curve keys have no private key to derive), outputs already counted as burned (NUMS keys), hashed outputs that have never spent, and revealed scripts with no key in them. A different cut through the same outputs — never added to the loss total. #[a(href='/', style='color:var(--secondary)') Sweep the capture on the homepage →] · Rules: #[a(href='/proposals/015', style='color:var(--secondary)') 015] #[a(href='/proposals/016', style='color:var(--secondary)') 016] #[a(href='/proposals/019', style='color:var(--secondary)') 019] #[a(href='/proposals/020', style='color:var(--secondary)') 020] #[a(href='/proposals/021', style='color:var(--secondary)') 021] #[a(href='/proposals/022', style='color:var(--secondary)') 022]

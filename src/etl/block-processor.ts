@@ -1,6 +1,6 @@
 import { upsertBlock } from '../db/blocks.js';
 import { insertUtxo, deleteUtxo, markAddressPubkeyExposed as markUtxosPubkey, flagUtxoExposed } from '../db/utxos.js';
-import { upsertAddressInfo, markAddressPubkeyExposed as markAddrPubkey, markAddressKeyInScript } from '../db/address-info.js';
+import { upsertAddressInfo, markAddressPubkeyExposed as markAddrPubkey, markAddressKeyInScript, markSiblingAddresses } from '../db/address-info.js';
 import { classifyOutput, ClassifierInput } from '../classifiers/index.js';
 import { NumsMatcher, EMPTY_NUMS_MATCHER } from '../classifiers/nums.js';
 import { exposedKeysInOutput, revealedKeysFromInput, exposureRule, Exposure } from '../classifiers/exposure.js';
@@ -105,11 +105,16 @@ export async function processBlock(
 
       // Apply exposure before this tx's outputs are inserted, so change sent
       // back to a just-exposed address is flagged by the receipt path below.
+      // Proposal 022: keys revealed here for the first time also expose their
+      // other addresses. A reused address's later spends reveal nothing new.
+      // Batched per tx: most inputs are first spends of fresh addresses.
+      const firstRevealKeys: string[] = [];
       for (const [addr, exp] of exposedThisBlock) {
         const keys = exp.keys.join(',');
-        await markAddrPubkey(client, addr, keys, blockNumber, exp.kind);
+        if (await markAddrPubkey(client, addr, keys, blockNumber, exp.kind)) firstRevealKeys.push(...exp.keys);
         await markUtxosPubkey(client, addr, keys, exposureRule(exp.kind));
       }
+      await markSiblingAddresses(client, firstRevealKeys, blockNumber);
       exposedThisBlock.clear();
 
       // Process OUTPUTS (insert new UTXOs)
@@ -185,6 +190,12 @@ export async function processBlock(
         }
         if (address && inScript) {
           await markAddressKeyInScript(client, address, inScript.kind, inScript.keys.join(','));
+        }
+        // Proposal 022: a P2PK or bare-multisig key is public from creation, so
+        // its single-key addresses are exposed too. (Taproot output keys are
+        // tweaked x-only keys that no single-key address commits to.)
+        if (inserted && inScript && inScript.kind !== 'p2tr') {
+          await markSiblingAddresses(client, inScript.keys, blockNumber);
         }
       }
     }

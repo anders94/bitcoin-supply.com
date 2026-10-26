@@ -11,12 +11,13 @@ import { classifyP2PKQuantum } from './proposals-015.js';
 import { classifyNumsBurn } from './proposals-018.js';
 import { classifyTaprootKey, classifyBareMultisig } from './proposals-019-020.js';
 
-export type RuleId = '000'|'001'|'003'|'004'|'005'|'006'|'007'|'008'|'009'|'010'|'011'|'012'|'013'|'015'|'016'|'018'|'019'|'020'|'021';
+export type RuleId = '000'|'001'|'003'|'004'|'005'|'006'|'007'|'008'|'009'|'010'|'011'|'012'|'013'|'015'|'016'|'018'|'019'|'020'|'021'|'022';
 export type LossBucket = 0 | 1 | 2 | 4;
 
 const PROVABLY_LOST = new Set(['000','001','003','004','005','006','007','008','009','010','011']);
 // Key visible in the output script from creation: P2PK, P2TR, bare multisig.
-// (016 / 021 are spend-time rules applied by the ETL, never by classifyOutput.)
+// (016 / 021 / 022 are rules applied by the ETL as keys become known, never by
+// classifyOutput.)
 const KEY_IN_SCRIPT = new Set(['015', '019', '020']);
 
 export function computeBucket(rules: RuleId[]): LossBucket {

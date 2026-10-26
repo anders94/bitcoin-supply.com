@@ -196,6 +196,7 @@ Each output is run through the full classifier pipeline. Results are aggregated 
 | 019 | Quantum | Taproot output (output key in script, always exposed) |
 | 020 | Quantum | Bare multisig with ≥ M valid keys (keys in script, always exposed) |
 | 021 | Quantum | P2SH/P2WSH where a prior spend has revealed the script and its keys |
+| 022 | Quantum | P2PKH/P2WPKH/P2SH-P2WPKH whose key is known from another address of the same key |
 
 The secp256k1 math (on-curve checks, multisig parsing, abort opcode detection) is ported verbatim from the original `detectors/index.js` with no logic changes.
 
