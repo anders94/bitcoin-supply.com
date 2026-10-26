@@ -211,7 +211,8 @@ router.get('/', async (req: Request, res: Response) => {
         // whole sats; round to a sat and show the full 8 decimals like every
         // other BTC figure on the site.
         captured: btc8(BigInt(Math.round(capN))),
-        capturedParts: btcParts(BigInt(Math.round(capN))),
+        // Hero figure: everything exposed, independent of the slider.
+        exposedParts: btcParts(exposed.sats),
         keys: Math.round(interp(keyTbl, capN)).toLocaleString('en-US'),
         minWorth: btc8(BigInt(Math.round(minwN))) + ' BTC',
         effAfter: btc8(BigInt(Math.round(Math.max(Number(effSats) - capN, 0)))),

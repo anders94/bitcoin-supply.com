@@ -135,11 +135,8 @@ function init() {
     $('q-keys').textContent = keys.toLocaleString('en-US');
     $('q-minworth').textContent = btc8(BigInt(Math.round(minw))) + ' BTC';
     $('q-effafter').textContent = btc8(BigInt(Math.round(Math.max(effN - cap, 0))));
-    const capP = btcParts(BigInt(Math.round(cap)));
-    const subQInt = document.getElementById('hero-sub-q-int');
-    const subQDec = document.getElementById('hero-sub-q-dec');
-    if (subQInt) subQInt.textContent = capP.int;
-    if (subQDec) subQDec.textContent = '.' + capP.dec;
+    // The hero's Q-EXPOSED figure is the static total; only the bar hatch
+    // (Q-CAPTURED) follows the slider.
   }
 
   function makeSlider(id: string, start: number, max: number, step: number, onUpdate: (v: number) => void) {

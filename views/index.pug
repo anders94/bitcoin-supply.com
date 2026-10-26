@@ -18,10 +18,10 @@ block content
         span.int#hero-sub-ooc-int −#{ssr.oocParts.int}
         span.dec#hero-sub-ooc-dec .#{ssr.oocParts.dec}
     .hero-sub
-      span.label.label--purple Q-CAPTURED
+      span.label.label--purple Q-EXPOSED
       span.figure.figure--purple
-        span.int#hero-sub-q-int= ssr.q.capturedParts.int
-        span.dec#hero-sub-q-dec .#{ssr.q.capturedParts.dec}
+        span.int= ssr.q.exposedParts.int
+        span.dec .#{ssr.q.exposedParts.dec}
     .hero-aside
       | +#{btc8(supply.miner_never_claimed_sats)} BTC expected,
       br

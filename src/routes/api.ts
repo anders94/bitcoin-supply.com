@@ -237,15 +237,20 @@ router.get('/quantum', async (req: Request, res: Response) => {
         ORDER BY utxo_value_sats DESC LIMIT 20
       `);
 
-      // By exposure year — address_info has pubkey_exposed_at_block and pre-aggregated balance
-      const { rows: byYear } = await pool.query(`
-        SELECT EXTRACT(YEAR FROM pubkey_exposed_at_block::float8 / 100000 * interval '1 year' + timestamp '2009-01-03') yr,
+      // By exposure year — address_info has pubkey_exposed_at_block and pre-aggregated balance.
+      // Only spend-revealed keys have an exposure block (P2PK / P2TR / P2MS are
+      // exposed from creation), split into key-hash (016) and script (021).
+      const { rows: yearRows } = await pool.query(`
+        SELECT CASE WHEN exposure_kind IN ('script', 'script-mixed') THEN 'script' ELSE 'pkh' END AS class,
+               EXTRACT(YEAR FROM pubkey_exposed_at_block::float8 / 100000 * interval '1 year' + timestamp '2009-01-03') yr,
                COUNT(*) addr_count,
                SUM(utxo_value_sats) total_sats
         FROM address_info
         WHERE pubkey_exposed_at_block IS NOT NULL AND utxo_count > 0
-        GROUP BY 1 ORDER BY 1
+        GROUP BY 1, 2 ORDER BY 2
       `);
+      const byYear = (cls: string) =>
+        yearRows.filter(r => r.class === cls).map(({ class: _c, ...r }) => r);
 
       return {
         computed_at_block: snaps['quantum_all_exposed']?.computed_at_block ?? null,
@@ -254,8 +259,8 @@ router.get('/quantum', async (req: Request, res: Response) => {
         p2tr: cat('quantum_p2tr'),
         p2ms: cat('quantum_p2ms'),
         // Exposed from first spend: the key (016) or script (021) was revealed.
-        exposed_pkh: { ...cat('quantum_exposed_pkh'), by_exposure_year: byYear },
-        exposed_script: cat('quantum_exposed_script'),
+        exposed_pkh: { ...cat('quantum_exposed_pkh'), by_exposure_year: byYear('pkh') },
+        exposed_script: { ...cat('quantum_exposed_script'), by_exposure_year: byYear('script') },
         total: cat('quantum_all_exposed'),
         // Kept for callers of the previous shape.
         combined_total_sats: cat('quantum_all_exposed').total_sats,
