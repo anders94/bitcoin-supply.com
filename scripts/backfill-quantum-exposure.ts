@@ -744,8 +744,8 @@ async function phaseHybrid(): Promise<void> {
       try {
         await client.query('BEGIN');
         await client.query(`
-          UPDATE utxos SET loss_rules = $4, loss_bucket = $5,
-            pubkey_exposed = $5 IN (0, 4), pubkey_hex = CASE WHEN $5 IN (0, 4) THEN $6 END
+          UPDATE utxos SET loss_rules = $4::text[], loss_bucket = $5::smallint,
+            pubkey_exposed = $5::smallint IN (0, 4), pubkey_hex = CASE WHEN $5::smallint IN (0, 4) THEN $6 END
           WHERE tx_hash = $1 AND output_index = $2 AND block_number = $3
         `, [r.tx_hash, r.output_index, r.block_number, rules, bucket, r.exp!.keys.join(',')]);
         await markSiblingAddresses(client, r.exp!.keys, Number(r.block_number));
