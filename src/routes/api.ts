@@ -221,15 +221,11 @@ router.get('/quantum', async (req: Request, res: Response) => {
         utxo_count: snaps[key]?.utxo_count ?? '0',
       });
 
-      // Address-level view: addresses with a balance, by exposure kind.
-      // Legacy rows (pre-migration 008) resolve to p2pk / pkh.
-      const { rows: byKind } = await pool.query(`
-        SELECT COALESCE(exposure_kind, CASE WHEN is_p2pk THEN 'p2pk' ELSE 'pkh' END) AS kind,
-               COUNT(*)::text AS address_count,
-               COALESCE(SUM(utxo_value_sats), 0)::text AS total_sats
-        FROM address_info WHERE pubkey_exposed = TRUE AND utxo_count > 0
-        GROUP BY 1 ORDER BY 1
-      `);
+      // Address-level breakdowns need a full address_info pass, so the ETL
+      // snapshot job computes them once a day (computed_stats).
+      const stats = await getComputedStats(['quantum_address_view']);
+      const view = stats['quantum_address_view'];
+      const byKind = view?.data?.addresses_by_kind ?? [];
 
       const { rows: top } = await pool.query(`
         SELECT address, utxo_value_sats AS balance, utxo_count,
@@ -238,20 +234,9 @@ router.get('/quantum', async (req: Request, res: Response) => {
         ORDER BY utxo_value_sats DESC LIMIT 20
       `);
 
-      // By exposure year — address_info has pubkey_exposed_at_block and pre-aggregated balance.
-      // Only spend-revealed keys have an exposure block (P2PK / P2TR / P2MS are
-      // exposed from creation), split into key-hash (016) and script (021).
-      const { rows: yearRows } = await pool.query(`
-        SELECT CASE WHEN exposure_kind IN ('script', 'script-mixed') THEN 'script' ELSE 'pkh' END AS class,
-               EXTRACT(YEAR FROM pubkey_exposed_at_block::float8 / 100000 * interval '1 year' + timestamp '2009-01-03') yr,
-               COUNT(*) addr_count,
-               SUM(utxo_value_sats) total_sats
-        FROM address_info
-        WHERE pubkey_exposed_at_block IS NOT NULL AND utxo_count > 0
-        GROUP BY 1, 2 ORDER BY 2
-      `);
       const byYear = (cls: string) =>
-        yearRows.filter(r => r.class === cls).map(({ class: _c, ...r }) => r);
+        (view?.data?.by_exposure_year ?? []).filter((r: any) => r.class === cls)
+          .map(({ class: _c, ...r }: any) => r);
 
       return {
         computed_at_block: snaps['quantum_all_exposed']?.computed_at_block ?? null,
@@ -266,6 +251,7 @@ router.get('/quantum', async (req: Request, res: Response) => {
         // Kept for callers of the previous shape.
         combined_total_sats: cat('quantum_all_exposed').total_sats,
         addresses_by_kind: byKind,
+        addresses_as_of_block: view?.computed_at_block ?? null,
         top_addresses: top.map(r => ({
           address: r.address,
           balance: r.balance.toString(),

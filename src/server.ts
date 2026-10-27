@@ -8,6 +8,16 @@ import { localCache } from './services/local-cache.js';
 import apiRoutes from './routes/api.js';
 import pageRoutes from './routes/pages.js';
 import { config } from './config.js';
+import { pool } from './db/index.js';
+
+// No page should wait on Postgres longer than Cloudflare waits on us (60 s).
+// Without a cap, a slow query outlives its client and keeps holding one of the
+// pool's connections, so a few of them stall every other route. Web only: the
+// ETL shares the pool module and its snapshot / backfill queries run for minutes.
+const STATEMENT_TIMEOUT_MS = 30_000;
+pool.on('connect', (client) => {
+  client.query(`SET statement_timeout = ${STATEMENT_TIMEOUT_MS}`).catch(() => {});
+});
 
 const app = express();
 

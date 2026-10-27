@@ -36,7 +36,24 @@ async function stage(name: string, fn: () => Promise<void>): Promise<boolean> {
   }
 }
 
+// The live ETL fires this hourly; a run slower than that (the daily address
+// scan) must not start a second one on top of it.
+let running = false;
+
 export async function updateSnapshots(): Promise<void> {
+  if (running) {
+    console.log('Snapshot update still running, skipping this one');
+    return;
+  }
+  running = true;
+  try {
+    await runSnapshots();
+  } finally {
+    running = false;
+  }
+}
+
+async function runSnapshots(): Promise<void> {
   const { rows: tipRows } = await pool.query(
     'SELECT block_number, block_timestamp FROM blocks ORDER BY block_number DESC LIMIT 1'
   );
@@ -55,6 +72,7 @@ export async function updateSnapshots(): Promise<void> {
   await stage('dormant giants', () => dormantGiants(tipBlock, tipTs));
   await stage('project eleven cross-check', () => projectElevenCrosscheck(tipBlock));
   await stage('script-mixed balance', () => scriptMixed(tipBlock));
+  await stage('address-level quantum view (daily)', () => quantumAddressView(tipBlock));
 
   console.log(`Snapshots updated at block ${tipBlock}`);
 }
@@ -69,6 +87,55 @@ async function scriptMixed(tipBlock: number): Promise<void> {
     FROM address_info WHERE exposure_kind = 'script-mixed' AND utxo_count > 0
   `);
   await upsertComputedStat('quantum_script_mixed', rows[0], tipBlock);
+}
+
+// /api/v1/quantum's address-level breakdowns: funded exposed addresses by
+// exposure kind, and spend-revealed ones by the year their key went public.
+// That is a full pass over address_info (~1.5B rows, 500 GB), so it runs at
+// most once a day; the endpoint used to do it on every cache miss.
+const ADDRESS_VIEW_MAX_AGE_MS = 23 * 60 * 60 * 1000;
+
+async function quantumAddressView(tipBlock: number): Promise<void> {
+  const { rows: prev } = await pool.query(
+    `SELECT computed_at FROM computed_stats WHERE key = 'quantum_address_view'`
+  );
+  if (prev.length && Date.now() - new Date(prev[0].computed_at).getTime() < ADDRESS_VIEW_MAX_AGE_MS) return;
+
+  // Legacy rows (pre-migration 008) resolve to p2pk / pkh. Only spend-revealed
+  // keys have an exposure block (P2PK / P2TR / P2MS are exposed from creation),
+  // split into key-hash (016) and script (021).
+  const { rows } = await pool.query(`
+    SELECT COALESCE(exposure_kind, CASE WHEN is_p2pk THEN 'p2pk' ELSE 'pkh' END) AS kind,
+           pubkey_exposed,
+           EXTRACT(YEAR FROM pubkey_exposed_at_block::float8 / 100000 * interval '1 year' + timestamp '2009-01-03')::int AS yr,
+           COUNT(*)::text AS n,
+           COALESCE(SUM(utxo_value_sats), 0)::text AS sats
+    FROM address_info
+    WHERE utxo_count > 0 AND (pubkey_exposed OR pubkey_exposed_at_block IS NOT NULL)
+    GROUP BY 1, 2, 3
+  `);
+
+  const byKind = new Map<string, { n: bigint; sats: bigint }>();
+  const byYear = new Map<string, { n: bigint; sats: bigint }>(); // `${class}:${yr}`
+  const bump = (m: Map<string, { n: bigint; sats: bigint }>, k: string, r: any) => {
+    const acc = m.get(k) ?? { n: 0n, sats: 0n };
+    acc.n += BigInt(r.n);
+    acc.sats += BigInt(r.sats);
+    m.set(k, acc);
+  };
+  for (const r of rows) {
+    if (r.pubkey_exposed) bump(byKind, r.kind, r);
+    if (r.yr !== null) bump(byYear, `${r.kind === 'script' || r.kind === 'script-mixed' ? 'script' : 'pkh'}:${r.yr}`, r);
+  }
+
+  await upsertComputedStat('quantum_address_view', {
+    addresses_by_kind: [...byKind].sort(([a], [b]) => a.localeCompare(b))
+      .map(([kind, v]) => ({ kind, address_count: v.n.toString(), total_sats: v.sats.toString() })),
+    by_exposure_year: [...byYear].map(([k, v]) => {
+      const [cls, yr] = k.split(':');
+      return { class: cls, yr, addr_count: v.n.toString(), total_sats: v.sats.toString() };
+    }).sort((a, b) => Number(a.yr) - Number(b.yr)),
+  }, tipBlock);
 }
 
 // One grouped pass over the whole utxos table. Feeds every loss_snapshots key,
