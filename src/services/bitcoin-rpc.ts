@@ -40,8 +40,10 @@ export async function getBlockHash(height: number): Promise<string> {
   return rpc('getblockhash', [height]);
 }
 
-export async function getBlock(hash: string): Promise<any> {
-  return rpc('getblock', [hash, 3]);
+// Verbosity 3 adds each input's prevout (what the ETL needs); 2 decodes the
+// transactions without it, which is roughly twice as fast.
+export async function getBlock(hash: string, verbosity: 2 | 3 = 3): Promise<any> {
+  return rpc('getblock', [hash, verbosity]);
 }
 
 export async function getBlockCount(): Promise<number> {

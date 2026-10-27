@@ -33,12 +33,22 @@
 //             are flagged by the ETL. A few hours; DB only. Pass 2 resumes via
 //             etl_state 'backfill_022_next_page'. Re-runnable to pick up
 //             siblings first funded after their key was revealed.
+//   outkeys   Proposal 022, the rest: siblings of keys in P2PK and bare-multisig
+//             outputs that are already spent (siblings reads only unspent
+//             ones from utxos). Walks every block's outputs over RPC
+//             (verbosity 2, no prevouts). Resumable via etl_state
+//             'backfill_022_next_block'; run it on the ETL box.
+//   hybrid    P2PK / bare-multisig outputs whose only usable keys are hybrid
+//             (06 / 07): classified provably lost (005 / 006) before
+//             isOnSecp256k1Curve accepted that encoding. Retags them 015 / 020
+//             and marks the key's sibling addresses (022). One utxos scan.
 //
 // Usage:
 //   npx tsx scripts/backfill-quantum-exposure.ts                      # dry run, SQL phases
 //   npx tsx scripts/backfill-quantum-exposure.ts --execute
 //   npx tsx scripts/backfill-quantum-exposure.ts --phase scripts --execute [--from N] [--to N]
 //   npx tsx scripts/backfill-quantum-exposure.ts --phase siblings --execute
+//   npx tsx scripts/backfill-quantum-exposure.ts --phase outkeys --execute [--from N] [--to N]
 //
 // Every phase is idempotent and safe to re-run; the live ETL may keep running
 // alongside (both sides only ever set flags that are not yet set).
@@ -52,10 +62,12 @@ import { config } from '../src/config.js';
 import { getBlockHash, getBlock } from '../src/services/bitcoin-rpc.js';
 import {
   exposedKeysInOutput, revealedKeysFromInput, exposureRule, Exposure,
-  keyHashes, base58check, segwitV0Address,
+  keyHashes, base58check, segwitV0Address, siblingAddresses,
 } from '../src/classifiers/exposure.js';
 import { parseMultisigScript } from '../src/classifiers/proposals-000-011.js';
 import { markAddressPubkeyExposed as markUtxos } from '../src/db/utxos.js';
+import { markSiblingAddresses } from '../src/db/address-info.js';
+import { computeBucket, RuleId } from '../src/classifiers/index.js';
 
 const args = process.argv.slice(2);
 const EXECUTE = args.includes('--execute');
@@ -502,6 +514,66 @@ class PrefixSet {
 }
 
 interface SiblingHit { address: string; key: string; block: number | null; }
+interface SiblingTally { marked: number; funded: number; flagged: number; sats: bigint; }
+
+const newTally = (): SiblingTally => ({ marked: 0, funded: 0, flagged: 0, sats: 0n });
+const tallyLine = (t: SiblingTally) =>
+  `addresses ${t.marked} (${t.funded} funded, ${btc(t.sats)} BTC)${EXECUTE ? ` | coins flagged ${t.flagged}` : ''}`;
+
+// Confirm candidate siblings against the database (prefix matches and address
+// types are only candidates) and mark them in one statement. First exposure
+// wins: an address already holding a key is left alone, and among duplicate
+// hits the first (earliest block, when hits arrive in chain order) is kept.
+async function applySiblingHits(hits: SiblingHit[], tally: SiblingTally): Promise<void> {
+  if (hits.length === 0) return;
+  const uniq = new Map<string, SiblingHit>();
+  for (const h of hits) if (!uniq.has(h.address)) uniq.set(h.address, h);
+  const hs = [...uniq.values()];
+  if (!EXECUTE) {
+    const { rows } = await pool.query(`
+      SELECT address, utxo_count, utxo_value_sats::text AS sats FROM address_info
+      WHERE address = ANY($1::text[]) AND pubkey_hex IS NULL
+    `, [hs.map(h => h.address)]);
+    for (const r of rows) {
+      tally.marked++;
+      if (Number(r.utxo_count) > 0) { tally.funded++; tally.sats += BigInt(r.sats); }
+    }
+    return;
+  }
+  await withDeadlockRetry(async () => {
+    const client = await pool.connect();
+    let m = 0, f = 0, fl = 0, sats = 0n;
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query(`
+        UPDATE address_info ai
+        SET pubkey_hex = v.key, pubkey_exposed_at_block = v.block, pubkey_exposed = TRUE,
+            exposure_kind = COALESCE(ai.exposure_kind, 'reuse'), updated_at = now()
+        FROM unnest($1::text[], $2::text[], $3::int[]) AS v(address, key, block)
+        WHERE ai.address = v.address AND ai.pubkey_hex IS NULL
+        RETURNING ai.address, ai.utxo_count, ai.utxo_value_sats::text AS sats, v.key
+      `, [hs.map(h => h.address), hs.map(h => h.key), hs.map(h => h.block)]);
+      for (const r of rows) {
+        m++;
+        if (Number(r.utxo_count) === 0) continue;
+        f++; sats += BigInt(r.sats);
+        const res = await client.query(`
+          SELECT COUNT(*)::int AS n FROM utxos
+          WHERE address = $1 AND pubkey_exposed = FALSE AND loss_bucket IN (0, 4)
+        `, [r.address]);
+        fl += res.rows[0].n;
+        await markUtxos(client, r.address, r.key, '022');
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    tally.marked += m; tally.funded += f; tally.flagged += fl; tally.sats += sats;
+  });
+}
 
 async function phaseSiblings(): Promise<void> {
   log('phase siblings: other addresses of known keys (022)');
@@ -537,60 +609,9 @@ async function phaseSiblings(): Promise<void> {
     }
   };
 
-  let marked = 0, funded = 0, flagged = 0, fundedSats = 0n;
-  const apply = async (hits: SiblingHit[]) => {
-    if (hits.length === 0) return;
-    // Confirm against the database (prefix matches and address types are
-    // only candidates) and mark in one statement; first exposure wins.
-    const uniq = new Map(hits.map(h => [h.address, h]));
-    const hs = [...uniq.values()];
-    if (!EXECUTE) {
-      const { rows } = await pool.query(`
-        SELECT address, utxo_count, utxo_value_sats::text AS sats FROM address_info
-        WHERE address = ANY($1::text[]) AND pubkey_hex IS NULL
-      `, [hs.map(h => h.address)]);
-      for (const r of rows) {
-        marked++;
-        if (Number(r.utxo_count) > 0) { funded++; fundedSats += BigInt(r.sats); }
-      }
-      return;
-    }
-    await withDeadlockRetry(async () => {
-      const client = await pool.connect();
-      let m = 0, f = 0, fl = 0, sats = 0n;
-      try {
-        await client.query('BEGIN');
-        const { rows } = await client.query(`
-          UPDATE address_info ai
-          SET pubkey_hex = v.key, pubkey_exposed_at_block = v.block, pubkey_exposed = TRUE,
-              exposure_kind = COALESCE(ai.exposure_kind, 'reuse'), updated_at = now()
-          FROM unnest($1::text[], $2::text[], $3::int[]) AS v(address, key, block)
-          WHERE ai.address = v.address AND ai.pubkey_hex IS NULL
-          RETURNING ai.address, ai.utxo_count, ai.utxo_value_sats::text AS sats, v.key
-        `, [hs.map(h => h.address), hs.map(h => h.key), hs.map(h => h.block)]);
-        for (const r of rows) {
-          m++;
-          if (Number(r.utxo_count) === 0) continue;
-          f++; sats += BigInt(r.sats);
-          const res = await client.query(`
-            SELECT COUNT(*)::int AS n FROM utxos
-            WHERE address = $1 AND pubkey_exposed = FALSE AND loss_bucket IN (0, 4)
-          `, [r.address]);
-          fl += res.rows[0].n;
-          await markUtxos(client, r.address, r.key, '022');
-        }
-        await client.query('COMMIT');
-      } catch (err) {
-        await client.query('ROLLBACK');
-        throw err;
-      } finally {
-        client.release();
-      }
-      marked += m; funded += f; flagged += fl; fundedSats += sats;
-    });
-  };
-  const report = (where: string) =>
-    log(`  ${where} | addresses ${marked} (${funded} funded, ${btc(fundedSats)} BTC)${EXECUTE ? ` | coins flagged ${flagged}` : ''}`);
+  const tally = newTally();
+  const apply = (hits: SiblingHit[]) => applySiblingHits(hits, tally);
+  const report = (where: string) => log(`  ${where} | ${tallyLine(tally)}`);
 
   // Keys in output scripts: P2PK (015) and bare multisig (020) still unspent,
   // plus the lost-bucket coinbase keys (genesis, BIP-30 duplicates), whose
@@ -628,16 +649,124 @@ async function phaseSiblings(): Promise<void> {
     }
   }
   if (EXECUTE) await setState(SIBLING_PROGRESS_KEY, '0');  // a re-run starts over
-  log(`  done: ${marked} sibling addresses ${EXECUTE ? 'marked' : 'would be marked'}, ${funded} funded (${btc(fundedSats)} BTC)`);
+  log(`  done: ${tally.marked} sibling addresses ${EXECUTE ? 'marked' : 'would be marked'}, ${tally.funded} funded (${btc(tally.sats)} BTC)`);
 }
 
 // ---------------------------------------------------------------------------
+// outkeys: Proposal 022, keys in spent P2PK / bare-multisig outputs
+// ---------------------------------------------------------------------------
+
+const OUTKEYS_PROGRESS_KEY = 'backfill_022_next_block';
+const OUTPUT_KEY_TYPES = new Set(['pubkey', 'multisig']);
+
+async function phaseOutkeys(): Promise<void> {
+  log('phase outkeys: siblings of keys in every P2PK / bare-multisig output (022)');
+  const from = Number(argValue('--from') ?? (await getState(OUTKEYS_PROGRESS_KEY)) ?? 0);
+  const to = Number(argValue('--to') ?? (await getState('last_synced_block')) ?? 0);
+  if (to < from) { log(`  nothing to do (from ${from} > to ${to})`); return; }
+  log(`  blocks ${from}..${to}${EXECUTE ? '' : ' (dry run: counting only)'}`);
+
+  const concurrency = Math.max(1, config.etl.concurrency);
+  const tally = newTally();
+  // A key seen once has had its siblings handled; most P2PK keys recur
+  // (pool payouts, tribute), so skip repeats instead of re-querying them.
+  const seen = new Set<string>();
+  let keysSeen = 0;
+  const t0 = Date.now();
+  let lastReport = t0;
+
+  for (let current = from; current <= to; ) {
+    const batch: number[] = [];
+    for (let i = 0; i < concurrency && current + i <= to; i++) batch.push(current + i);
+    const hashes = await Promise.all(batch.map(h => getBlockHash(h)));
+    const blocks = await Promise.all(hashes.map(h => getBlock(h, 2)));
+
+    // Chain order, so the first hit per address carries the earliest block.
+    const hits: SiblingHit[] = [];
+    for (const block of blocks) {
+      for (const tx of block.tx) {
+        for (const vout of tx.vout) {
+          if (!OUTPUT_KEY_TYPES.has(vout.scriptPubKey?.type)) continue;
+          // On-curve keys only, and >= M of them for multisig: same test as 015 / 020.
+          for (const k of exposedKeysInOutput(vout.scriptPubKey.hex)?.keys ?? []) {
+            if (seen.has(k)) continue;
+            seen.add(k);
+            keysSeen++;
+            for (const s of siblingAddresses(k)) hits.push({ ...s, block: block.height });
+          }
+        }
+      }
+    }
+    await applySiblingHits(hits, tally);
+
+    current += batch.length;
+    if (EXECUTE) await setState(OUTKEYS_PROGRESS_KEY, String(current));
+
+    const now = Date.now();
+    if (now - lastReport > 60_000 || current > to) {
+      const rate = (current - from) / ((now - t0) / 1000);
+      const eta = rate > 0 ? Math.round((to - current) / rate / 60) : NaN;
+      log(`  block ${current - 1}/${to} | keys ${keysSeen} | ${tallyLine(tally)} | eta ${eta}m`);
+      lastReport = now;
+    }
+  }
+
+  log(`  done: ${tally.marked} sibling addresses ${EXECUTE ? 'marked' : 'would be marked'}, ${tally.funded} funded (${btc(tally.sats)} BTC)`);
+}
+
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// hybrid: keys with an 06 / 07 prefix are spendable
+// ---------------------------------------------------------------------------
+async function phaseHybrid(): Promise<void> {
+  log('phase hybrid: 005 / 006 outputs spendable with hybrid keys');
+  const { rows } = await pool.query(`
+    SELECT tx_hash, output_index, block_number, script_hex, value_sats::text, loss_rules
+    FROM utxos WHERE loss_rules && '{005,006}'
+  `);
+  // exposedKeysInOutput applies the corrected key test: a row it now accepts
+  // was only "lost" because of the hybrid encoding.
+  const targets = rows
+    .map(r => ({ ...r, exp: exposedKeysInOutput(r.script_hex) }))
+    .filter(r => r.exp?.kind === 'p2pk' || r.exp?.kind === 'p2ms');
+  const sats = targets.reduce((s, r) => s + BigInt(r.value_sats), 0n);
+  log(`  ${rows.length} rows tagged 005 / 006, ${targets.length} spendable (${btc(sats)} BTC)`);
+  for (const r of targets) log(`    ${r.tx_hash}:${r.output_index} block ${r.block_number}, ${btc(r.value_sats)} BTC, ${r.exp!.kind}`);
+  if (!EXECUTE) return;
+  for (const r of targets) {
+    const rules = (r.loss_rules as RuleId[])
+      .filter(x => x !== '005' && x !== '006')
+      .concat(r.exp!.kind === 'p2pk' ? '015' : '020');
+    const bucket = computeBucket(rules);
+    await withDeadlockRetry(async () => {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(`
+          UPDATE utxos SET loss_rules = $4, loss_bucket = $5,
+            pubkey_exposed = $5 IN (0, 4), pubkey_hex = CASE WHEN $5 IN (0, 4) THEN $6 END
+          WHERE tx_hash = $1 AND output_index = $2 AND block_number = $3
+        `, [r.tx_hash, r.output_index, r.block_number, rules, bucket, r.exp!.keys.join(',')]);
+        await markSiblingAddresses(client, r.exp!.keys, Number(r.block_number));
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    });
+  }
+  log(`  retagged ${targets.length}`);
+}
 
 async function main() {
   log(`backfill-quantum-exposure: phases [${PHASES.join(', ')}] ${EXECUTE ? 'EXECUTE' : 'DRY RUN'}`);
   const runners: Record<string, () => Promise<void>> = {
     fix: phaseFix, kinds: phaseKinds, receipts: phaseReceipts,
-    p2tr: phaseP2tr, p2ms: phaseP2ms, scripts: phaseScripts, siblings: phaseSiblings,
+    p2tr: phaseP2tr, p2ms: phaseP2ms, scripts: phaseScripts, siblings: phaseSiblings, outkeys: phaseOutkeys,
+    hybrid: phaseHybrid,
   };
   for (const p of PHASES) {
     const run = runners[p];

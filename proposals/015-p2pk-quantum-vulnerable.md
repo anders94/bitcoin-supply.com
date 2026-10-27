@@ -20,7 +20,7 @@ from the public key and spend these outputs without the owner's cooperation.
 ## Detection
 
 P2PK outputs are identified by their script structure:
-- **Uncompressed**: `41 04 <x> <y> ac` (134 hex chars)
+- **Uncompressed**: `41 04 <x> <y> ac` (134 hex chars), or the hybrid prefix `06` / `07` (see 005)
 - **Compressed**: `21 02/03 <x> ac` (70 hex chars)
 
 Only *valid* curve points are tagged (off-curve keys are already tagged by Proposal 005).

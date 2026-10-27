@@ -4,10 +4,10 @@ import { isOnSecp256k1Curve } from './proposals-000-011.js';
 // Tag valid P2PK outputs as quantum-vulnerable (pubkey in script, known to attacker)
 export function classifyP2PKQuantum(ctx: ClassifierInput): '015' | null {
   const hex = ctx.script_hex;
-  // Uncompressed: 41 + 04 + 64 bytes + ac = 134 chars
+  // Uncompressed: 41 + 04 (or hybrid 06/07) + 64 bytes + ac = 134 chars
   if (hex.length === 134 && hex.startsWith('41') && hex.endsWith('ac')) {
     const prefix = hex.slice(2, 4);
-    if (prefix === '04') {
+    if (prefix === '04' || prefix === '06' || prefix === '07') {
       const pubkey = hex.slice(2, 132);
       if (isOnSecp256k1Curve(pubkey)) return '015';
     }

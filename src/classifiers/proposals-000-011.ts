@@ -60,13 +60,18 @@ export function parseMultisigScript(hex: string): { m: number; n: number; pubkey
   return { m, n, pubkeys };
 }
 
+// Accepts every encoding OP_CHECKSIG accepts (libsecp256k1's pubkey parser):
+// 02/03 compressed, 04 uncompressed, and 06/07 "hybrid" (uncompressed with
+// the parity of y repeated in the prefix, which must match). Rejecting hybrid
+// keys is relay policy (STRICTENC), not consensus, so such outputs can be spent.
 export function isOnSecp256k1Curve(pubkeyHex: string): boolean {
   const p = SECP256K1_P;
   const prefix = pubkeyHex.slice(0, 2);
-  if (prefix === '04' && pubkeyHex.length === 130) {
+  if ((prefix === '04' || prefix === '06' || prefix === '07') && pubkeyHex.length === 130) {
     const x = BigInt('0x' + pubkeyHex.slice(2, 66));
     const y = BigInt('0x' + pubkeyHex.slice(66, 130));
     if (x === 0n || x >= p || y === 0n || y >= p) return false;
+    if (prefix !== '04' && (y & 1n) !== (prefix === '07' ? 1n : 0n)) return false;
     const x3 = (x * x % p * x) % p;
     return (y * y) % p === (x3 + 7n) % p;
   } else if ((prefix === '02' || prefix === '03') && pubkeyHex.length === 66) {
@@ -142,7 +147,8 @@ export function classifyOpVerifAbort(ctx: ClassifierInput): '011' | null {
 export function classifyOffCurvePk(ctx: ClassifierInput): '005' | null {
   const hex = ctx.script_hex;
   let pubkeyHex: string | null = null;
-  // Uncompressed P2PK: push(65) + 04 + x(32) + y(32) + OP_CHECKSIG
+  // Uncompressed P2PK: push(65) + 04/06/07 + x(32) + y(32) + OP_CHECKSIG. Any
+  // other prefix fails isOnSecp256k1Curve and lands here too.
   if (hex.length === 134 && hex.startsWith('41') && hex.endsWith('ac')) {
     pubkeyHex = hex.slice(2, 132);
   }

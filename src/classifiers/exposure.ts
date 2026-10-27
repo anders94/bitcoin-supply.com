@@ -73,7 +73,7 @@ export function parseScript(hex: string): ParsedScript | null {
 
 export function isValidPubkey(hex: string): boolean {
   if (hex.length === 66) return (hex.startsWith('02') || hex.startsWith('03')) && isOnSecp256k1Curve(hex);
-  if (hex.length === 130) return hex.startsWith('04') && isOnSecp256k1Curve(hex);
+  if (hex.length === 130) return isOnSecp256k1Curve(hex);  // 04, or hybrid 06 / 07
   return false;
 }
 
@@ -213,13 +213,15 @@ const P2WPKH_PREFIX = Buffer.from('0014', 'hex');
 // The encodings of a key that single-key address types commit to. An
 // uncompressed key also yields its compressed form (the parity of y is right
 // there); the reverse needs a modular square root, and no wallet pays the
-// uncompressed addresses of a key it uses compressed.
+// uncompressed addresses of a key it uses compressed. A hybrid key (06 / 07)
+// yields itself plus both standard forms.
 export function keyHashes(keyHex: string): KeyHashes[] {
   const hex = keyHex.toLowerCase();
   const encodings: string[] = [];
-  if (hex.length === 130 && hex.startsWith('04')) {
+  if (hex.length === 130 && (hex.startsWith('04') || hex.startsWith('06') || hex.startsWith('07'))) {
     const odd = parseInt(hex.slice(128, 130), 16) & 1;
-    encodings.push(hex, (odd ? '03' : '02') + hex.slice(2, 66));
+    if (!hex.startsWith('04')) encodings.push(hex);
+    encodings.push('04' + hex.slice(2), (odd ? '03' : '02') + hex.slice(2, 66));
   } else if (hex.length === 66 && (hex.startsWith('02') || hex.startsWith('03'))) {
     encodings.push(hex);
   }

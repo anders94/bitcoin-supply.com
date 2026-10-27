@@ -29,6 +29,13 @@ curve equation. For a **compressed key** (`02/03 x`), validity requires that a s
 `x³ + 7 mod p` exists (i.e. `x³ + 7` is a quadratic residue mod p). If neither condition holds,
 the key is off-curve and the output is provably unspendable.
 
+**Hybrid keys.** A 65-byte key may also carry prefix `06` (y even) or `07` (y odd), the "hybrid"
+encoding. `OP_CHECKSIG` accepts it when the point is on the curve and the prefix matches the parity
+of y; rejecting hybrid keys is relay policy (`SCRIPT_VERIFY_STRICTENC`), not consensus. Such an
+output is spendable and is not lost: it is classified 015 (quantum vulnerable) instead. A hybrid
+key whose prefix contradicts y, or a 65-byte key with any other prefix, is lost under this rule.
+One UTXO is affected (2,817 sats, block 707034); it was counted here until 2026-10-27.
+
 Note: Only P2PK outputs are checked. P2PKH outputs contain only a hash of the key, so the
 underlying key cannot be verified from the script alone.
 
