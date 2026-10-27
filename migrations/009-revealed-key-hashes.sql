@@ -4,7 +4,7 @@
 -- src/classifiers/exposure.ts):
 --   h8     first 8 bytes (signed) of a HASH160: a P2PKH / P2WPKH key hash, or
 --          a P2SH-P2WPKH script hash
---   key    the key encoding it came from; a lookup re-hashes it to confirm
+--   key    the key encoding it came from. A lookup re-hashes it to confirm
 --          the full 20 bytes, so prefix collisions cannot produce a match
 --   block  the block the key became public
 -- Duplicates (one key revealed at several addresses) are harmless. Filled by
