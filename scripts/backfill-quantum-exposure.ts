@@ -299,9 +299,13 @@ async function phaseP2tr(): Promise<void> {
 // ---------------------------------------------------------------------------
 async function phaseP2ms(): Promise<void> {
   log('phase p2ms: bare multisig outputs (020)');
+  // bitcoind calls a multisig 'nonstandard' when any key is malformed, as in
+  // Counterparty's 1-of-2 outputs (one real key, one data push). One valid key
+  // still meets M = 1, so the script shape decides, not script_type.
   const { rows } = await pool.query(`
     SELECT tx_hash, output_index, block_number, script_hex, value_sats::text
-    FROM utxos WHERE script_type = 'multisig' AND loss_bucket IN (0, 4) AND NOT loss_rules @> '{020}'
+    FROM utxos WHERE script_type IN ('multisig', 'nonstandard') AND loss_bucket IN (0, 4)
+      AND NOT loss_rules @> '{020}'
   `);
   const targets = rows
     .map(r => ({ ...r, exp: exposedKeysInOutput(r.script_hex) }))
@@ -321,6 +325,15 @@ async function phaseP2ms(): Promise<void> {
     n += res.rowCount ?? 0;
   }
   log(`  tagged ${n}`);
+
+  // Proposal 022 for the same keys, once per distinct key.
+  const keys = new Map<string, number>();
+  for (const r of targets) for (const k of r.exp!.keys) if (!keys.has(k)) keys.set(k, Number(r.block_number));
+  const tally = newTally();
+  const hits: SiblingHit[] = [];
+  for (const [k, block] of keys) for (const s of siblingAddresses(k)) hits.push({ ...s, block });
+  for (let i = 0; i < hits.length; i += 5_000) await applySiblingHits(hits.slice(i, i + 5_000), tally);
+  log(`  siblings (022) of ${keys.size} keys: ${tallyLine(tally)}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -618,7 +631,7 @@ async function phaseSiblings(): Promise<void> {
   // keys are valid even though those outputs can never move.
   const { rows: inScript } = await pool.query(`
     SELECT script_hex, MIN(block_number) AS block FROM utxos
-    WHERE script_type IN ('pubkey', 'multisig') AND loss_bucket IN (1, 4)
+    WHERE script_type IN ('pubkey', 'multisig', 'nonstandard') AND loss_bucket IN (1, 4)
     GROUP BY script_hex
   `);
   const scriptHits: SiblingHit[] = [];

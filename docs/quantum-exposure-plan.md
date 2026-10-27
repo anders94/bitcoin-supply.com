@@ -87,3 +87,57 @@ homepage (UTXO-level): 5,900,844 vs 3,575,929 BTC. Step 1 reconciles them.
 
 Expected result after 3: ≈ 6.1M BTC. After 4: within a few tens of thousands
 of BTC of Project Eleven, the residue being their P2PK/P2PKH address ambiguity.
+
+## Outcome (2026-10-27)
+
+Steps 1–6 shipped and backfilled on the dev database by 2026-10-26: snapshot
+7,147,966 BTC exposed against Project Eleven's 7,121,995 at the time. The
+follow-up below came out of a review for remaining gaps.
+
+## Step 7 — Proposal 022: key reuse across address types
+
+A key's other single-key addresses (P2PKH, P2WPKH, P2SH-P2WPKH; both encodings
+for uncompressed keys) are exposed once the key is public anywhere.
+
+* ETL: on a key's first reveal (015, 016, 020, 021), every existing sibling
+  address in `address_info` is marked `exposure_kind = 'reuse'` and its coins
+  tagged 022 (one UPDATE per transaction).
+* Backfill phase `siblings`: two passes over `address_info`, matching in memory
+  (about 4 hours). Result: 54,463 addresses, 2,386 BTC. Counted in the pkh row.
+* Phase `outkeys` (keys from already-spent P2PK / bare-multisig outputs, via an
+  output-only chain walk) exists but was not run: samples across every era
+  found almost nothing beyond `siblings`.
+
+## Step 8 — Classifier gaps: hybrid keys, nonstandard multisig
+
+`OP_CHECKSIG` accepts 65-byte keys with prefix 06 / 07 when the prefix matches
+the parity of y; STRICTENC rejects them as policy only. `isOnSecp256k1Curve`
+accepted only 04, so such outputs were counted provably lost (005 / 006). Fixed
+at the source, so 005, 006, 015, 020 and the 016 / 021 / 022 key handling all
+agree. Backfill phase `hybrid`: one UTXO retagged 005 → 015 (2,817 sats).
+
+Also found while reconciling P2MS with Project Eleven: bitcoind labels a bare
+multisig `nonstandard` when any key is malformed, as in Counterparty's 1-of-2
+outputs (one real key, one data push). The classifier goes by script shape and
+tags new ones 020, but phase `p2ms` had selected by `script_type = 'multisig'`
+and skipped 158,955 existing ones (9.96 BTC). It now selects nonstandard rows
+too and marks their keys' siblings (022).
+
+## Step 9 — Catch siblings funded after the reveal (planned)
+
+The ETL marks a key's siblings only if they already exist when the key is
+revealed. A sibling that receives its first coins later is missed until
+`siblings` is re-run. Of the 2,386 BTC above:
+
+| Relation of new address to the revealed one | BTC | Detectable at receipt |
+|---------------------------------------------|-----|-----------------------|
+| Same HASH160; new address is P2PKH or P2WPKH | 988 | Derive its siblings, look them up in `address_info` (two primary-key probes) |
+| Same HASH160; new address is P2SH-P2WPKH | 518 | Needs a reverse index: the P2SH hash cannot be inverted |
+| Other encoding, or key from a script / P2PK / P2MS | 880 | Needs a reverse index |
+
+Plan: (a) the forward check at first receipt; (b) a `revealed_key_hashes`
+table holding only the hashes a forward check cannot derive (~1.5B rows,
+~100–150 GB), filled by a one-off sweep and maintained by the ETL at every
+reveal; (c) the address page says why an address is exposed (which sibling,
+which block) and warns, for an unexposed address, that "no spends" alone is not
+a sufficient check.

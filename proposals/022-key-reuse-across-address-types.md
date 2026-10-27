@@ -6,7 +6,7 @@
 | Status              | Draft             |
 | Created             | 2026-10-26        |
 | Category            | Quantum Vulnerable|
-| Scale Estimate      | ~2,000–3,000 BTC  |
+| Scale Estimate      | 2,386 BTC (measured at block 973321) |
 
 ## Problem
 
@@ -53,6 +53,9 @@ WHERE address = $1 AND pubkey_exposed = FALSE AND loss_bucket IN (0, 4)
 
 Later receipts at a marked address are tagged on arrival by the existing receipt path.
 
+Uncompressed and hybrid (`06` / `07`, see 005) keys yield the addresses of both standard
+encodings, plus the hybrid encoding's own.
+
 ## Classification
 
 Loss bucket: **4** (Quantum only) for UTXOs with no other loss classification.
@@ -64,10 +67,11 @@ P2SH-P2WPKH): they are single-key outputs whose key is public. The `022` tag kee
 
 - **Siblings first funded after the reveal.** The ETL marks sibling addresses it already knows. An
   address that receives its first coins after its key was revealed elsewhere is not caught, because
-  there was no row to mark at reveal time. Catching it would mean indexing every known key's
-  HASH160 (several billion entries). Re-running the backfill sweep picks these up.
+  there was no row to mark at reveal time. Re-running `--phase siblings` picks these up; a check at
+  receipt time is planned (docs/quantum-exposure-plan.md, step 8).
 - **Keys from spent P2PK and bare-multisig outputs.** The database keeps only unspent outputs, so
-  their keys are recovered only by a chain walk (a separate, optional backfill).
+  their keys are recovered only by a chain walk (`--phase outkeys`, below). Sampling found almost
+  nothing there.
 
 ## Backfill
 
@@ -75,6 +79,23 @@ P2SH-P2WPKH): they are single-key outputs whose key is public. The `022` tag kee
 `address_info`. The first collects every address not yet exposed; the second derives the siblings
 of every known key and matches them against the first set in memory. Only matches touch the
 database. P2PK and bare-multisig keys are read from `utxos`.
+
+Run on 2026-10-26/27 (about 4 hours): 54,463 addresses marked, all funded, 239,021 UTXOs and
+2,386 BTC tagged. The largest single case is a wallet migration: `1D58NtxrZF4iUnGAFojnqNpPuGi9rrcyVf`
+spent 519.70 BTC at block 501886, revealing its uncompressed key, and the coins went to the same
+key's compressed address `1LRHPN36YQufar8gH4au2evXLeD5ddPJwY`, where they still sit.
+
+How each marked address relates to the key's source, which decides how it can be caught later:
+
+| Relation | Addresses | BTC |
+|----------|-----------|-----|
+| Same HASH160, P2PKH ↔ P2WPKH, or wrapped source → P2PKH / P2WPKH | 9,737 | 988 |
+| Same HASH160, new address is P2SH-P2WPKH | 3,930 | 518 |
+| Other encoding (uncompressed → compressed), or key from a script / P2PK / P2MS | 40,779 | 880 |
+
+`--phase outkeys` adds keys from P2PK and bare-multisig outputs that are already spent, by walking
+every block's outputs over RPC. Samples across all eras found almost nothing beyond `siblings`
+(0.003 BTC in the first 3,000 blocks, nothing elsewhere), so the full two-day walk was not run.
 
 ## Relationship to Other Proposals
 

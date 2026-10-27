@@ -31,7 +31,17 @@ block content
     .note--italic Of the P2SH / P2WSH figure, #{btc8(mixed.sats)} BTC across #{num(mixed.addrs)} addresses sits behind scripts that also carry a hash-preimage condition (HTLC-style). Their keys are public and the usual timeout branch needs only a signature, so they are counted — marked EXPOSED-SCRIPT* below.
 
   if crosscheck
-    .note--italic Cross-check: #[a(href='https://bitcoin-risq-list.projecteleven.com', style='color:var(--secondary)') Project Eleven’s Bitcoin Risq List] reports #{btc8(crosscheck.total_sats)} BTC at block #{num(crosscheck.block_height)} (fetched #{dateUtc(crosscheck.fetched_at)}). They count by address and resolve P2PK outputs to their P2PKH-form address; we count output by output. Anything beyond that residue is a divergence worth explaining.
+    section.section.section--tight
+      span.label CROSS-CHECK · #[a(href='https://bitcoin-risq-list.projecteleven.com', style='color:var(--secondary)') PROJECT ELEVEN’S BITCOIN RISQ LIST] · BLOCK #{num(crosscheck.block_height)}
+      .rows(style='font-size:10px')
+        .row.row--dotted
+          span.k
+          span ours · theirs · difference
+        each r in crossRows
+          .row.row--dotted
+            span.k= r.k
+            span #{btc8(r.ours)} · #{btc8(r.theirs)} · #{btc8(r.diff)}
+      .note--italic Fetched #{dateUtc(crosscheck.fetched_at)}. They count by address and resolve P2PK outputs to their P2PKH-form address; we count output by output, which accounts for the P2PK residue. They split spent addresses by address type, so all P2SH (including P2SH-P2WPKH) is "script" there and key hash here; only the combined row compares. We also count coins at other addresses of an already public key (rule 022), which they do not. Their P2MS figure is per address too: each multisig key becomes its P2PKH-form address and that address's whole balance counts, so it includes ordinary P2PKH coins of cosigner keys, which we count as key reuse in the key-hash row.
 
   section.section.section--tight
     span.label TOP EXPOSED ADDRESSES · BY BALANCE

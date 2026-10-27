@@ -609,6 +609,20 @@ router.get('/quantum', async (req: Request, res: Response) => {
       ? snapOf('quantum_exposed_pkh')
       : { sats: (BigInt(all.sats) - BigInt(p2pk.sats)).toString(), count: '0', present: false };
 
+    // Project Eleven splits spent-and-revealed addresses by address type (all
+    // P2SH, including P2SH-P2WPKH, is "script"); we split by what was revealed.
+    // Only the combined figure is comparable, so that is the row shown.
+    const p11 = stats['p11_crosscheck']?.data ?? null;
+    const sum = (...xs: (string | undefined)[]) => xs.reduce((s, x) => s + BigInt(x ?? 0), 0n).toString();
+    const crossRows = p11 ? [
+      { k: 'P2PK', ours: p2pk.sats, theirs: p11.p2pk_sats },
+      { k: 'P2TR', ours: p2tr.sats, theirs: p11.p2tr_sats },
+      { k: 'P2MS', ours: p2ms.sats, theirs: p11.p2ms_sats },
+      { k: 'revealed by a spend (key hash + script)', ours: sum(pkh.sats, script.sats),
+        theirs: sum(p11.pkh_reuse_sats, p11.script_reuse_sats) },
+      { k: 'total', ours: all.sats, theirs: p11.total_sats },
+    ].map(r => ({ ...r, diff: (BigInt(r.ours) - BigInt(r.theirs ?? 0)).toString() })) : [];
+
     res.locals.meta.description =
       `${btc2(all.sats)} BTC sits in outputs whose public keys are already visible ` +
       `on-chain — P2PK, taproot and bare multisig outputs, plus every address that ` +
@@ -619,7 +633,7 @@ router.get('/quantum', async (req: Request, res: Response) => {
       all, p2pk, p2tr, p2ms, pkh, script,
       mixed: { sats: mixedRows[0]?.sats ?? '0', addrs: mixedRows[0]?.addrs ?? '0' },
       topExposed,
-      crosscheck: stats['p11_crosscheck']?.data ?? null,
+      crosscheck: p11, crossRows,
       ...viewHelpers,
     });
   } catch (err) {
