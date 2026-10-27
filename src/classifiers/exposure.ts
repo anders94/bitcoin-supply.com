@@ -283,3 +283,87 @@ export function siblingAddresses(keyHex: string): SiblingAddress[] {
     { address: base58check(0x05, p2shH160), key },
   ]);
 }
+
+// ---------------------------------------------------------------------------
+// From an address back to a known key (Proposal 022 at receipt time)
+// ---------------------------------------------------------------------------
+
+export type SingleKeyType = 'p2pkh' | 'p2wpkh' | 'p2sh';
+
+// Type and 20-byte payload of a P2PKH / P2SH (base58) or P2WPKH (bech32 v0)
+// address, or null for any other kind. Checksums are not verified: every
+// match against a payload is confirmed by re-hashing a real key.
+export function addressPayload(addr: string): { type: SingleKeyType; payload: Buffer } | null {
+  if (addr.startsWith('bc1q')) {
+    if (addr.length !== 42) return null;  // P2WSH is 62
+    const out: number[] = [];
+    let acc = 0, bits = 0;
+    for (let i = 4; i < addr.length - 6; i++) {
+      const v = BECH32.indexOf(addr[i]);
+      if (v < 0) return null;
+      acc = (acc << 5) | v; bits += 5;
+      if (bits >= 8) { bits -= 8; out.push((acc >> bits) & 0xff); }
+    }
+    return out.length === 20 ? { type: 'p2wpkh', payload: Buffer.from(out) } : null;
+  }
+  if (addr[0] !== '1' && addr[0] !== '3') return null;
+  const bytes = new Uint8Array(25);
+  for (const ch of addr) {
+    let carry = B58.indexOf(ch);
+    if (carry < 0) return null;
+    for (let i = 24; i >= 0; i--) {
+      carry += bytes[i] * 58;
+      bytes[i] = carry & 0xff;
+      carry >>= 8;
+    }
+    if (carry) return null;  // longer than 25 bytes
+  }
+  const version = bytes[0];
+  if (version !== 0x00 && version !== 0x05) return null;
+  return { type: version === 0x00 ? 'p2pkh' : 'p2sh', payload: Buffer.from(bytes.subarray(1, 21)) };
+}
+
+// The P2SH-P2WPKH script hash for a key hash: HASH160(0014 <h160>).
+export const p2shWrap = (h160: Buffer): Buffer => hash160(Buffer.concat([P2WPKH_PREFIX, h160]));
+
+// Addresses that share a P2PKH / P2WPKH address's key hash: the other of the
+// two, and the P2SH-P2WPKH wrapping. Computable from the address alone, so a
+// key revealed at any of them is found by looking them up. (A P2SH address
+// cannot be unwrapped, so it has none.)
+export function forwardSiblings(addr: string): string[] {
+  const a = addressPayload(addr);
+  if (!a || a.type === 'p2sh') return [];
+  const other = a.type === 'p2pkh' ? segwitV0Address(a.payload) : base58check(0x00, a.payload);
+  return [other, base58check(0x05, p2shWrap(a.payload))];
+}
+
+// Signed first 8 bytes of a hash: the revealed_key_hashes lookup column.
+export const hashPrefix = (h: Buffer): bigint => h.readBigInt64BE(0);
+
+export interface KeyHashEntry { h8: bigint; key: string; }
+
+// Entries for revealed_key_hashes: every sibling hash of `keyHex` that
+// forwardSiblings() cannot reach from a sibling address. When the key was
+// revealed by spending from a single-key address (`revealedAt`), that
+// encoding's key hash is reachable (its P2PKH / P2WPKH / P2SH-P2WPKH siblings
+// all forward-resolve to the exposed address), and so is its P2SH wrapping if
+// the reveal was the P2SH-P2WPKH address itself. Everything else, i.e. other
+// encodings and keys seen in scripts or outputs, needs an entry.
+export function reverseIndexEntries(keyHex: string, revealedAt: string | null): KeyHashEntry[] {
+  const at = revealedAt ? addressPayload(revealedAt) : null;
+  const out: KeyHashEntry[] = [];
+  for (const { key, h160, p2shH160 } of keyHashes(keyHex)) {
+    const revealedEncoding = at !== null && (at.type === 'p2sh' ? p2shH160 : h160).equals(at.payload);
+    if (!revealedEncoding) out.push({ h8: hashPrefix(h160), key });
+    if (!(revealedEncoding && at!.type === 'p2sh')) out.push({ h8: hashPrefix(p2shH160), key });
+  }
+  return out;
+}
+
+// Does `keyHex` control `addr` through a single-key template?
+export function keyControls(keyHex: string, addr: string): boolean {
+  const a = addressPayload(addr);
+  if (!a) return false;
+  const h = hash160(Buffer.from(keyHex, 'hex'));
+  return (a.type === 'p2sh' ? p2shWrap(h) : h).equals(a.payload);
+}

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { addressQuantumStatus } from '../db/address-info.js';
 import { pool } from '../db/index.js';
 import { getComputedStats } from '../db/computed-stats.js';
 import { withCache } from '../services/redis.js';
@@ -418,6 +419,7 @@ router.get('/address/:addr', async (req: Request, res: Response) => {
       ? BigInt(addrInfo.utxo_value_sats ?? 0)
       : utxos.reduce((sum: bigint, u: any) => sum + BigInt(u.value_sats), 0n);
     const totalUtxos = addrInfo ? Number(addrInfo.utxo_count) : utxos.length;
+    const q = await addressQuantumStatus(addr, addrInfo);
 
     res.set('Cache-Control', ENTITY_CACHE_CONTROL);
     res.json({
@@ -434,16 +436,24 @@ router.get('/address/:addr', async (req: Request, res: Response) => {
       quantum: {
         // A revealed public key makes the whole balance breakable by a
         // sufficiently powerful quantum computer.
-        pubkey_exposed: addrInfo?.pubkey_exposed ?? false,
+        pubkey_exposed: q.exposed,
         is_p2pk: addrInfo?.is_p2pk ?? false,
         // How the key(s) became public: p2pk, p2tr, p2ms (in the output
         // script), pkh (revealed by a spend), script / script-mixed (revealed
-        // redeem or witness script; "mixed" also has a hash-preimage branch).
-        exposure_kind: addrInfo?.pubkey_exposed
-          ? (addrInfo.exposure_kind ?? (addrInfo.is_p2pk ? 'p2pk' : 'pkh'))
-          : null,
+        // redeem or witness script; "mixed" also has a hash-preimage branch),
+        // reuse (the same key revealed at another of its addresses, 022).
+        exposure_kind: q.kind,
         // Comma-joined when a script revealed several keys.
-        pubkey_hex: addrInfo?.pubkey_hex ?? null,
+        pubkey_hex: q.keys.length ? q.keys.join(',') : null,
+        exposed_at_block: q.block,
+        // reuse: the sibling address whose spend revealed the key, if any.
+        revealed_via: q.via,
+        // false when found by the live lookup but not yet marked by the ETL.
+        recorded: q.recorded,
+        // For an address with no known key: whether the check covered keys
+        // seen in scripts and other encodings too (see /address page).
+        full_coverage: q.fullCoverage,
+        as_of_block: q.asOfBlock,
       },
       utxos: utxos.map((u: any) => ({
         tx_hash: u.tx_hash,

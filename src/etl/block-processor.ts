@@ -1,6 +1,9 @@
 import { upsertBlock } from '../db/blocks.js';
 import { insertUtxo, deleteUtxo, markAddressPubkeyExposed as markUtxosPubkey, flagUtxoExposed } from '../db/utxos.js';
-import { upsertAddressInfo, markAddressPubkeyExposed as markAddrPubkey, markAddressKeyInScript, markSiblingAddresses } from '../db/address-info.js';
+import {
+  upsertAddressInfo, markAddressPubkeyExposed as markAddrPubkey, markAddressKeyInScript, markSiblingAddresses,
+  indexRevealedKeys, markReceivedSiblings,
+} from '../db/address-info.js';
 import { classifyOutput, ClassifierInput } from '../classifiers/index.js';
 import { NumsMatcher, EMPTY_NUMS_MATCHER } from '../classifiers/nums.js';
 import { exposedKeysInOutput, revealedKeysFromInput, exposureRule, Exposure } from '../classifiers/exposure.js';
@@ -66,6 +69,10 @@ export async function processBlock(
 
     // Addresses whose keys a transaction's inputs reveal (each address once per tx)
     const exposedThisBlock = new Map<string, Exposure>();
+    // Proposal 022 at receipt time: keys that became public this block (for
+    // revealed_key_hashes) and addresses that received their first coins.
+    const newlyPublic: { keys: string[]; revealedAt: string | null }[] = [];
+    const firstReceipts = new Set<string>();
 
     // Second pass: process transactions
     for (const tx of block.tx) {
@@ -111,7 +118,10 @@ export async function processBlock(
       const firstRevealKeys: string[] = [];
       for (const [addr, exp] of exposedThisBlock) {
         const keys = exp.keys.join(',');
-        if (await markAddrPubkey(client, addr, keys, blockNumber, exp.kind)) firstRevealKeys.push(...exp.keys);
+        if (await markAddrPubkey(client, addr, keys, blockNumber, exp.kind)) {
+          firstRevealKeys.push(...exp.keys);
+          newlyPublic.push({ keys: exp.keys, revealedAt: exp.kind === 'pkh' ? addr : null });
+        }
         await markUtxosPubkey(client, addr, keys, exposureRule(exp.kind));
       }
       await markSiblingAddresses(client, firstRevealKeys, blockNumber);
@@ -186,6 +196,8 @@ export async function processBlock(
               client, tx.txid, i, blockNumber, prior.pubkey_hex,
               exposureRule(prior.exposure_kind ?? 'pkh')
             );
+          } else if (!inScript && prior?.is_new) {
+            firstReceipts.add(address);
           }
         }
         if (address && inScript) {
@@ -196,9 +208,17 @@ export async function processBlock(
         // tweaked x-only keys that no single-key address commits to.)
         if (inserted && inScript && inScript.kind !== 'p2tr') {
           await markSiblingAddresses(client, inScript.keys, blockNumber);
+          newlyPublic.push({ keys: inScript.keys, revealedAt: null });
         }
       }
     }
+
+    // Proposal 022 at receipt time. A sibling that already existed when its
+    // key became public was marked above (markSiblingAddresses); one first
+    // funded later is caught here, by checking each new address against every
+    // key public so far, this block's included.
+    await indexRevealedKeys(client, newlyPublic, blockNumber);
+    await markReceivedSiblings(client, [...firstReceipts], blockNumber);
 
     await client.query('COMMIT');
   } catch (err) {

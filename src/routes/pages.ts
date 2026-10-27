@@ -6,6 +6,7 @@ import { config } from '../config.js';
 import { pool } from '../db/index.js';
 import { getAllSnapshots } from '../db/snapshots.js';
 import { getComputedStats } from '../db/computed-stats.js';
+import { addressQuantumStatus } from '../db/address-info.js';
 import { getCachedRawTransaction } from '../services/tx-data.js';
 import { getTip } from '../services/tip.js';
 import { loadBlock } from '../services/block-data.js';
@@ -536,11 +537,10 @@ router.get('/address/:addr', async (req: Request, res: Response) => {
       : utxos.reduce((sum: bigint, u: any) => sum + BigInt(u.value_sats), 0n);
 
     const totalUtxos = addrInfo ? Number(addrInfo.utxo_count) : utxos.length;
-    // Legacy rows (pre-migration 008) carry no kind; the old ETL could only
-    // produce P2PK or a revealed P2PKH/P2WPKH key.
-    const exposureKind: string | null = addrInfo?.pubkey_exposed
-      ? (addrInfo.exposure_kind ?? (addrInfo.is_p2pk ? 'p2pk' : 'pkh'))
-      : null;
+    // Includes the live sibling check (022), so an address the ETL has not
+    // marked yet, or one never funded, still gets a complete answer.
+    const quantum = await addressQuantumStatus(addr, addrInfo);
+    const exposureKind: string | null = quantum.kind;
     res.locals.meta.description =
       `Bitcoin address ${shortAddress(addr)}: ${btc8(totalBalance)} BTC unspent across ` +
       `${num(totalUtxos)} UTXO${totalUtxos === 1 ? '' : 's'}` +
@@ -564,6 +564,7 @@ router.get('/address/:addr', async (req: Request, res: Response) => {
       exposureKind,
       exposureChip: exposureKind ? EXPOSURE_KIND_CHIP[exposureKind] ?? 'Q-EXPOSED' : null,
       exposureText: exposureKind ? EXPOSURE_KIND_TEXT[exposureKind] ?? EXPOSURE_KIND_TEXT['pkh'] : null,
+      quantum,
       ...viewHelpers,
     });
   } catch (err) {

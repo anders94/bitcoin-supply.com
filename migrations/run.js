@@ -15,6 +15,7 @@ const MIGRATIONS = [
   '006-address-value-index.sql',
   '007-nums-keys.sql',
   '008-exposure-kind.sql',
+  '009-revealed-key-hashes.sql',
 ];
 
 async function run() {

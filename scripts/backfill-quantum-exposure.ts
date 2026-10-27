@@ -38,6 +38,14 @@
 //             ones from utxos). Walks every block's outputs over RPC
 //             (verbosity 2, no prevouts). Resumable via etl_state
 //             'backfill_022_next_block'; run it on the ETL box.
+//   keyindex  Proposal 022 at receipt time: fill revealed_key_hashes (migration
+//             009) from every key already public, so the ETL can tell when an
+//             address receiving its first coins belongs to one. One pass over
+//             address_info plus the P2PK / bare-multisig keys in utxos. Builds
+//             a side table, indexes it, then swaps it in (the ETL keeps
+//             inserting into the live table meanwhile; those rows are carried
+//             over). 12-20 hours, ~1.8B rows / ~180 GB. Resumable via
+//             etl_state 'backfill_keyindex_next_page'.
 //   hybrid    P2PK / bare-multisig outputs whose only usable keys are hybrid
 //             (06 / 07): classified provably lost (005 / 006) before
 //             isOnSecp256k1Curve accepted that encoding. Retags them 015 / 020
@@ -49,6 +57,7 @@
 //   npx tsx scripts/backfill-quantum-exposure.ts --phase scripts --execute [--from N] [--to N]
 //   npx tsx scripts/backfill-quantum-exposure.ts --phase siblings --execute
 //   npx tsx scripts/backfill-quantum-exposure.ts --phase outkeys --execute [--from N] [--to N]
+//   npx tsx scripts/backfill-quantum-exposure.ts --phase keyindex --execute
 //
 // Every phase is idempotent and safe to re-run; the live ETL may keep running
 // alongside (both sides only ever set flags that are not yet set).
@@ -62,11 +71,11 @@ import { config } from '../src/config.js';
 import { getBlockHash, getBlock } from '../src/services/bitcoin-rpc.js';
 import {
   exposedKeysInOutput, revealedKeysFromInput, exposureRule, Exposure,
-  keyHashes, base58check, segwitV0Address, siblingAddresses,
+  keyHashes, base58check, segwitV0Address, siblingAddresses, addressPayload, reverseIndexEntries,
 } from '../src/classifiers/exposure.js';
 import { parseMultisigScript } from '../src/classifiers/proposals-000-011.js';
 import { markAddressPubkeyExposed as markUtxos } from '../src/db/utxos.js';
-import { markSiblingAddresses } from '../src/db/address-info.js';
+import { markSiblingAddresses, KEYINDEX_BUILT_KEY } from '../src/db/address-info.js';
 import { computeBucket, RuleId } from '../src/classifiers/index.js';
 
 const args = process.argv.slice(2);
@@ -461,37 +470,6 @@ async function phaseScripts(): Promise<void> {
 const SIBLING_BATCH_PAGES = 20_000;  // ~160 MB of address_info heap per query
 const SIBLING_PROGRESS_KEY = 'backfill_022_next_page';
 
-// 20-byte payload of a P2PKH / P2SH (base58) or P2WPKH (bech32 v0) address,
-// or null for any other kind. Checksums are not verified: these come from the
-// database, and a match is confirmed there before anything is written.
-function addressPayload(addr: string): Buffer | null {
-  if (addr.startsWith('bc1q')) {
-    if (addr.length !== 42) return null;  // P2WSH is 62
-    const out: number[] = [];
-    let acc = 0, bits = 0;
-    for (let i = 4; i < addr.length - 6; i++) {
-      const v = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'.indexOf(addr[i]);
-      if (v < 0) return null;
-      acc = (acc << 5) | v; bits += 5;
-      if (bits >= 8) { bits -= 8; out.push((acc >> bits) & 0xff); }
-    }
-    return out.length === 20 ? Buffer.from(out) : null;
-  }
-  if (addr[0] !== '1' && addr[0] !== '3') return null;
-  const bytes = new Uint8Array(25);
-  for (const ch of addr) {
-    let carry = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'.indexOf(ch);
-    if (carry < 0) return null;
-    for (let i = 24; i >= 0; i--) {
-      carry += bytes[i] * 58;
-      bytes[i] = carry & 0xff;
-      carry >>= 8;
-    }
-    if (carry) return null;  // longer than 25 bytes
-  }
-  return Buffer.from(bytes.subarray(1, 21));
-}
-
 // Sorted first-8-byte prefixes of every target payload: ~8 bytes per address
 // instead of a JS string, and a binary search per lookup.
 class PrefixSet {
@@ -602,7 +580,7 @@ async function phaseSiblings(): Promise<void> {
       WHERE ctid >= $1::tid AND ctid < $2::tid AND pubkey_exposed = FALSE
     `, [`(${page},0)`, `(${page + SIBLING_BATCH_PAGES},0)`]);
     for (const r of rows) {
-      const p = addressPayload(r.address);
+      const p = addressPayload(r.address)?.payload;
       if (p) targets.add(p);
     }
     if ((page / SIBLING_BATCH_PAGES) % 200 === 199) log(`  pass 1: page ${page + SIBLING_BATCH_PAGES}/${pages}`);
@@ -730,6 +708,112 @@ async function phaseOutkeys(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// keyindex: revealed_key_hashes for every key already public
+// ---------------------------------------------------------------------------
+
+const KEYINDEX_PROGRESS_KEY = 'backfill_keyindex_next_page';
+const KEYINDEX_BATCH_PAGES = 20_000;
+const KEYINDEX_INSERT_ROWS = 50_000;
+const BUILD_TABLE = 'revealed_key_hashes_build';
+
+async function phaseKeyindex(): Promise<void> {
+  log('phase keyindex: revealed_key_hashes from every public key (022 at receipt time)');
+  const { rows: [{ pages }] } = await pool.query(
+    `SELECT (pg_relation_size('address_info') / current_setting('block_size')::int)::int AS pages`
+  );
+  const start = EXECUTE ? Number((await getState(KEYINDEX_PROGRESS_KEY)) ?? 0) : 0;
+  if (EXECUTE) {
+    // No index while loading: one bulk build at the end is far cheaper.
+    await pool.query(`CREATE TABLE IF NOT EXISTS ${BUILD_TABLE} (LIKE revealed_key_hashes INCLUDING DEFAULTS)`);
+    if (start > 0) log(`  resuming at page ${start}`);
+  }
+
+  let total = 0;
+  let pending: { h8: string; key: string; block: number }[] = [];
+  const flush = async () => {
+    if (pending.length === 0) return;
+    if (EXECUTE) {
+      await pool.query(`
+        INSERT INTO ${BUILD_TABLE} (h8, key, block)
+        SELECT h8, decode(key, 'hex'), block FROM unnest($1::bigint[], $2::text[], $3::int[]) AS v(h8, key, block)
+      `, [pending.map(e => e.h8), pending.map(e => e.key), pending.map(e => e.block)]);
+    }
+    total += pending.length;
+    pending = [];
+  };
+  const add = async (keys: string[], revealedAt: string | null, block: number) => {
+    for (const k of keys) {
+      for (const e of reverseIndexEntries(k, revealedAt)) pending.push({ h8: e.h8.toString(), key: e.key, block });
+    }
+    if (pending.length >= KEYINDEX_INSERT_ROWS) await flush();
+  };
+
+  // Keys revealed by spends (and legacy P2PK rows). Taproot keys have no
+  // single-key siblings; 'reuse' rows repeat a key indexed at its source.
+  for (let page = start; page < pages; page += KEYINDEX_BATCH_PAGES) {
+    const { rows } = await pool.query(`
+      SELECT address, pubkey_hex, pubkey_exposed_at_block AS block,
+             COALESCE(exposure_kind, CASE WHEN is_p2pk THEN 'p2pk' ELSE 'pkh' END) AS kind
+      FROM address_info
+      WHERE ctid >= $1::tid AND ctid < $2::tid AND pubkey_exposed AND pubkey_hex IS NOT NULL
+        AND exposure_kind IS DISTINCT FROM 'p2tr' AND exposure_kind IS DISTINCT FROM 'reuse'
+    `, [`(${page},0)`, `(${page + KEYINDEX_BATCH_PAGES},0)`]);
+    for (const r of rows) {
+      await add(r.pubkey_hex.split(','), r.kind === 'pkh' ? r.address : null, Number(r.block ?? 0));
+    }
+    await flush();
+    if (EXECUTE) await setState(KEYINDEX_PROGRESS_KEY, String(page + KEYINDEX_BATCH_PAGES));
+    if ((page / KEYINDEX_BATCH_PAGES) % 100 === 99 || page + KEYINDEX_BATCH_PAGES >= pages) {
+      log(`  address_info page ${Math.min(page + KEYINDEX_BATCH_PAGES, pages)}/${pages} | entries ${total}`);
+    }
+    // A dry run samples the first 2M pages and extrapolates.
+    if (!EXECUTE && page + KEYINDEX_BATCH_PAGES >= 2_000_000) {
+      const est = Math.round(total * pages / (page + KEYINDEX_BATCH_PAGES));
+      log(`  dry run: ~${est} entries over the whole table (~${Math.round(est * 100 / 1e9)} GB with index)`);
+      return;
+    }
+  }
+
+  // Keys in output scripts (P2PK, bare multisig; 'nonstandard' covers
+  // multisigs with a malformed cosigner), lost buckets included as in siblings.
+  const { rows: inScript } = await pool.query(`
+    SELECT script_hex, MIN(block_number) AS block FROM utxos
+    WHERE script_type IN ('pubkey', 'multisig', 'nonstandard') AND loss_bucket IN (1, 4)
+    GROUP BY script_hex
+  `);
+  for (const r of inScript) await add(exposedKeysInOutput(r.script_hex)?.keys ?? [], null, Number(r.block));
+  await flush();
+  log(`  output-script keys: ${inScript.length} scripts | entries ${total}`);
+
+  log('  building index');
+  const client = await pool.connect();
+  try {
+    await client.query(`SET maintenance_work_mem = '4GB'`);
+    await client.query(`CREATE INDEX IF NOT EXISTS ${BUILD_TABLE}_h8 ON ${BUILD_TABLE} (h8)`);
+    log('  swapping in');
+    await client.query('BEGIN');
+    // Blocks the ETL's inserts for the moment the swap takes; whatever it
+    // added since the migration is carried over.
+    await client.query('LOCK TABLE revealed_key_hashes IN EXCLUSIVE MODE');
+    await client.query(`INSERT INTO ${BUILD_TABLE} SELECT * FROM revealed_key_hashes`);
+    await client.query('DROP TABLE revealed_key_hashes');
+    await client.query(`ALTER TABLE ${BUILD_TABLE} RENAME TO revealed_key_hashes`);
+    await client.query(`ALTER INDEX ${BUILD_TABLE}_h8 RENAME TO idx_revealed_key_hashes_h8`);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+  await pool.query('ANALYZE revealed_key_hashes');
+  await setState(KEYINDEX_PROGRESS_KEY, '0');
+  // From here the address page may say a key-free address was fully checked.
+  await setState(KEYINDEX_BUILT_KEY, (await getState('last_synced_block')) ?? '0');
+  log(`  done: ${total} entries`);
+}
+
+// ---------------------------------------------------------------------------
 // hybrid: keys with an 06 / 07 prefix are spendable
 // ---------------------------------------------------------------------------
 async function phaseHybrid(): Promise<void> {
@@ -779,7 +863,7 @@ async function main() {
   const runners: Record<string, () => Promise<void>> = {
     fix: phaseFix, kinds: phaseKinds, receipts: phaseReceipts,
     p2tr: phaseP2tr, p2ms: phaseP2ms, scripts: phaseScripts, siblings: phaseSiblings, outkeys: phaseOutkeys,
-    hybrid: phaseHybrid,
+    hybrid: phaseHybrid, keyindex: phaseKeyindex,
   };
   for (const p of PHASES) {
     const run = runners[p];

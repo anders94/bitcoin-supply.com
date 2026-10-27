@@ -65,13 +65,30 @@ P2SH-P2WPKH): they are single-key outputs whose key is public. The `022` tag kee
 
 ## Limitations
 
-- **Siblings first funded after the reveal.** The ETL marks sibling addresses it already knows. An
-  address that receives its first coins after its key was revealed elsewhere is not caught, because
-  there was no row to mark at reveal time. Re-running `--phase siblings` picks these up; a check at
-  receipt time is planned (docs/quantum-exposure-plan.md, step 8).
+- **Siblings first funded after the reveal.** Handled at receipt time: the ETL checks every address
+  that receives its first coins against every public key (see *Receipt-time check* below).
 - **Keys from spent P2PK and bare-multisig outputs.** The database keeps only unspent outputs, so
   their keys are recovered only by a chain walk (`--phase outkeys`, below). Sampling found almost
   nothing there.
+
+## Receipt-time check
+
+At reveal time the ETL can only mark sibling addresses that already exist. A sibling first funded
+later is caught when it is funded: at the end of each block, every address that received its first
+coins is checked two ways.
+
+- **Forward.** A P2PKH or P2WPKH address's key hash also gives its other single-key forms (the other
+  of the two, and the P2SH-P2WPKH wrapping). If one of them is exposed and its key hashes to this
+  address, the address is exposed.
+- **Reverse.** `revealed_key_hashes` (migration 009) holds the sibling hashes no address can be
+  turned into: the P2SH-P2WPKH wrapping of keys revealed at P2PKH / P2WPKH addresses, the other
+  encoding of uncompressed and hybrid keys, and every form of keys seen in scripts, P2PK and
+  bare-multisig outputs. It is keyed by the first 8 bytes of the hash; each hit is confirmed by
+  re-hashing the stored key.
+
+A reveal before an address's first receipt is caught by this check, a reveal after it by the
+marking at reveal time, so no sibling is missed. The address page and `/api/v1/address` run the
+same lookup live, so an address can be checked before any coins are sent to it.
 
 ## Backfill
 

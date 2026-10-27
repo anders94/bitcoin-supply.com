@@ -12,10 +12,26 @@ block content
       |  #{exposureText} A sufficiently powerful quantum computer could derive the private key#{exposureKind === 'p2ms' || exposureKind === 'script' || exposureKind === 'script-mixed' ? 's' : ''}.
       |
       span.chip.chip--purple= exposureChip
-      if addrInfo && addrInfo.pubkey_hex
-        each k in String(addrInfo.pubkey_hex).split(',')
-          br
-          span.hash(style='font-size:8.5px;color:var(--faded)') #{exposureKind === 'p2tr' ? 'output key' : 'pubkey'} #{k}
+      if exposureKind === 'reuse'
+        br
+        if quantum.via
+          | Revealed by a spend from #[a(href=`/address/${quantum.via}`, style='color:var(--secondary)')= quantum.via]#{quantum.block != null ? ' in block ' + num(quantum.block) : ''}.
+        else
+          | Public since #{quantum.block != null ? 'block ' + num(quantum.block) : 'an earlier block'}: seen in a P2PK, bare-multisig or revealed script, or at this key’s other encoding (compressed / uncompressed).
+        if !quantum.recorded
+          |  Found by checking this address against every public key; not yet reflected in the totals.
+      each k in quantum.keys
+        br
+        span.hash(style='font-size:8.5px;color:var(--faded)') #{exposureKind === 'p2tr' ? 'output key' : 'pubkey'} #{k}
+  else
+    .note--italic
+      if quantum.singleKeyType
+        | No public key for this address is on-chain as of block #{quantum.asOfBlock != null ? num(quantum.asOfBlock) : '—'}. Checked: spends from this address, and the same key used anywhere else — at its P2PKH, P2WPKH and P2SH-P2WPKH addresses, compressed or uncompressed, and in P2PK, bare-multisig or revealed scripts. “Never spent” alone is not that check: a wallet can reuse one key across address types.
+        if !quantum.fullCoverage
+          |  (Partial: the index of keys seen in scripts and other encodings is still being built, so only spends from this address and its same-hash siblings were checked.)
+        |  Not covered: keys disclosed off-chain, such as signed messages or an extended public key (xpub) shared with a wallet or service.
+      else
+        | No spend from this address has revealed its script or keys as of block #{quantum.asOfBlock != null ? num(quantum.asOfBlock) : '—'}. For a script address the keys inside may still be public elsewhere; a quantum attacker would also need the script itself.
 
   .rows(style='font-size:10px')
     .row.row--dotted

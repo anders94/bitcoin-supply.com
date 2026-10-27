@@ -123,7 +123,7 @@ tags new ones 020, but phase `p2ms` had selected by `script_type = 'multisig'`
 and skipped 158,955 existing ones (9.96 BTC). It now selects nonstandard rows
 too and marks their keys' siblings (022).
 
-## Step 9 — Catch siblings funded after the reveal (planned)
+## Step 9 — Catch siblings funded after the reveal
 
 The ETL marks a key's siblings only if they already exist when the key is
 revealed. A sibling that receives its first coins later is missed until
@@ -135,9 +135,21 @@ revealed. A sibling that receives its first coins later is missed until
 | Same HASH160; new address is P2SH-P2WPKH | 518 | Needs a reverse index: the P2SH hash cannot be inverted |
 | Other encoding, or key from a script / P2PK / P2MS | 880 | Needs a reverse index |
 
-Plan: (a) the forward check at first receipt; (b) a `revealed_key_hashes`
-table holding only the hashes a forward check cannot derive (~1.5B rows,
-~100–150 GB), filled by a one-off sweep and maintained by the ETL at every
-reveal; (c) the address page says why an address is exposed (which sibling,
-which block) and warns, for an unexposed address, that "no spends" alone is not
-a sufficient check.
+* `revealed_key_hashes` (migration 009) holds only the hashes a forward check
+  cannot derive. The ETL adds entries as keys become public; phase `keyindex`
+  fills it for history (builds a side table, indexes it, swaps it in).
+  Measured by sampling: ~1.83B entries (~180 GB) - 1.00B P2SH-P2WPKH wraps of
+  keys revealed at P2PKH / P2WPKH, 0.76B from script / P2PK / P2MS keys, 0.07B
+  other encodings. The lean variant without the P2SH wraps (~80 GB) was
+  rejected: it would miss 518 BTC of the 022 sweep at receipt time.
+* ETL: at the end of each block, every address that received its first coins
+  is checked forward (its same-hash siblings in `address_info`) and reverse
+  (`revealed_key_hashes`); a match is marked `reuse` and its coins tagged 022.
+* Address page and API run the same check live, for any address, funded or
+  not: they say which sibling revealed the key and when, and for an address
+  with no known key, what was checked and what cannot be (keys disclosed
+  off-chain). Full coverage is claimed only once `keyindex` has finished.
+
+Rollout: `npm run migrate`; deploy ETL and web; `--phase keyindex --execute`;
+then `--phase siblings --execute` once more to catch siblings first funded
+between the first sweep and the deploy.
