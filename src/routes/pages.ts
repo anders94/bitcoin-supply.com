@@ -577,7 +577,7 @@ router.get('/address/:addr', async (req: Request, res: Response) => {
 router.get('/quantum', async (req: Request, res: Response) => {
   try {
     const snapshots = await getAllSnapshots();
-    const stats = await getComputedStats(['p11_crosscheck']);
+    const stats = await getComputedStats(['p11_crosscheck', 'quantum_script_mixed']);
     const { rows: topRows } = await pool.query(`
       SELECT address, utxo_value_sats AS balance, utxo_count, pubkey_exposed_at_block,
              COALESCE(exposure_kind, CASE WHEN is_p2pk THEN 'p2pk' ELSE 'pkh' END) AS exposure_kind
@@ -591,10 +591,8 @@ router.get('/quantum', async (req: Request, res: Response) => {
 
     // Mixed-script balances (keys revealed, but a hash-preimage branch exists)
     // are inside the script total; surfaced so the caveat is quantifiable.
-    const { rows: mixedRows } = await pool.query(`
-      SELECT COALESCE(SUM(utxo_value_sats), 0)::text AS sats, COUNT(*)::text AS addrs
-      FROM address_info WHERE exposure_kind = 'script-mixed' AND utxo_count > 0
-    `);
+    // From the hourly snapshot: the live query takes minutes on a cold cache.
+    const mixedStat = stats['quantum_script_mixed']?.data;
 
     const snapOf = (key: string) => ({
       sats: (snapshots[key]?.total_sats ?? 0n).toString(),
@@ -632,7 +630,7 @@ router.get('/quantum', async (req: Request, res: Response) => {
     res.render('quantum', {
       title: 'Quantum exposure',
       all, p2pk, p2tr, p2ms, pkh, script,
-      mixed: { sats: mixedRows[0]?.sats ?? '0', addrs: mixedRows[0]?.addrs ?? '0' },
+      mixed: { sats: mixedStat?.sats ?? '0', addrs: mixedStat?.addrs ?? '0' },
       topExposed,
       crosscheck: p11, crossRows,
       ...viewHelpers,

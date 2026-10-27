@@ -54,8 +54,21 @@ export async function updateSnapshots(): Promise<void> {
   await stage('halvings', () => halvings(tipBlock, tipTs));
   await stage('dormant giants', () => dormantGiants(tipBlock, tipTs));
   await stage('project eleven cross-check', () => projectElevenCrosscheck(tipBlock));
+  await stage('script-mixed balance', () => scriptMixed(tipBlock));
 
   console.log(`Snapshots updated at block ${tipBlock}`);
+}
+
+// Funded addresses whose revealed script also has a hash-preimage branch (the
+// /quantum caveat). Millions of address_info rows carry the kind but only a
+// few thousand are funded, so this is ~2M random heap reads: too slow for a
+// page request (minutes from a cold cache), fine once an hour here.
+async function scriptMixed(tipBlock: number): Promise<void> {
+  const { rows } = await pool.query(`
+    SELECT COALESCE(SUM(utxo_value_sats), 0)::text AS sats, COUNT(*)::text AS addrs
+    FROM address_info WHERE exposure_kind = 'script-mixed' AND utxo_count > 0
+  `);
+  await upsertComputedStat('quantum_script_mixed', rows[0], tipBlock);
 }
 
 // One grouped pass over the whole utxos table. Feeds every loss_snapshots key,
