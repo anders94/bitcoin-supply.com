@@ -25,7 +25,9 @@ block content
         span.hash(style='font-size:8.5px;color:var(--faded)') #{exposureKind === 'p2tr' ? 'output key' : 'pubkey'} #{k}
   else
     .note--italic
-      if quantum.singleKeyType
+      if !quantum.valid
+        | This is not a valid Bitcoin address: its checksum does not match, so it is most likely mistyped. Check it against your wallet before relying on anything on this page.
+      else if quantum.singleKeyType
         | No public key for this address is on-chain as of block #{quantum.asOfBlock != null ? num(quantum.asOfBlock) : '—'}. Checked: spends from this address, and the same key used anywhere else — at its P2PKH, P2WPKH and P2SH-P2WPKH addresses, compressed or uncompressed, and in P2PK, bare-multisig or revealed scripts. “Never spent” alone is not that check: a wallet can reuse one key across address types.
         if !quantum.fullCoverage
           |  (Partial: the index of keys seen in scripts and other encodings is still being built, so only spends from this address and its same-hash siblings were checked.)

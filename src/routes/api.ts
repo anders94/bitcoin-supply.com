@@ -422,6 +422,9 @@ router.get('/address/:addr', async (req: Request, res: Response) => {
       quantum: {
         // A revealed public key makes the whole balance breakable by a
         // sufficiently powerful quantum computer.
+        // false: not a valid address (bad checksum: likely a typo); nothing
+        // below means anything for it.
+        valid_address: q.valid,
         pubkey_exposed: q.exposed,
         is_p2pk: addrInfo?.is_p2pk ?? false,
         // How the key(s) became public: p2pk, p2tr, p2ms (in the output

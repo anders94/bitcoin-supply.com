@@ -304,7 +304,11 @@ export function addressPayload(addr: string): { type: SingleKeyType; payload: Bu
       acc = (acc << 5) | v; bits += 5;
       if (bits >= 8) { bits -= 8; out.push((acc >> bits) & 0xff); }
     }
-    return out.length === 20 ? { type: 'p2wpkh', payload: Buffer.from(out) } : null;
+    if (out.length !== 20) return null;
+    // Re-encoding checks the checksum and padding: a typo must not read as a
+    // real (and unexposed) address.
+    const payload = Buffer.from(out);
+    return segwitV0Address(payload) === addr ? { type: 'p2wpkh', payload } : null;
   }
   if (addr[0] !== '1' && addr[0] !== '3') return null;
   const bytes = new Uint8Array(25);
@@ -320,7 +324,29 @@ export function addressPayload(addr: string): { type: SingleKeyType; payload: Bu
   }
   const version = bytes[0];
   if (version !== 0x00 && version !== 0x05) return null;
-  return { type: version === 0x00 ? 'p2pkh' : 'p2sh', payload: Buffer.from(bytes.subarray(1, 21)) };
+  // Re-encoding checks the checksum and the leading '1's (each one a zero byte).
+  const payload = Buffer.from(bytes.subarray(1, 21));
+  if (base58check(version, payload) !== addr) return null;
+  return { type: version === 0x00 ? 'p2pkh' : 'p2sh', payload };
+}
+
+// Whether a string is a valid mainnet address of any type: base58check P2PKH /
+// P2SH, or segwit (bech32 for v0, bech32m for v1+, BIP-173 / BIP-350).
+export function isValidAddress(addr: string): boolean {
+  if (addr[0] === '1' || addr[0] === '3') return addressPayload(addr) !== null;
+  const lower = addr.toLowerCase();
+  if ((addr !== lower && addr !== addr.toUpperCase()) || !lower.startsWith('bc1') || lower.length > 90) return false;
+  const data = [...lower.slice(3)].map(c => BECH32.indexOf(c));
+  if (data.length < 7 || data.some(v => v < 0)) return false;
+  const version = data[0];
+  if (version > 16) return false;
+  // HRP 'bc' expanded: high bits of each char, 0, low bits of each char.
+  if (bech32Polymod([3, 3, 0, 2, 3, ...data]) !== (version === 0 ? 1 : 0x2bc830a3)) return false;
+  const bits = (data.length - 7) * 5;
+  const len = Math.floor(bits / 8);
+  if (bits % 8 >= 5) return false;
+  if (data[data.length - 7] & ((1 << (bits % 8)) - 1)) return false;  // non-zero padding
+  return version === 0 ? len === 20 || len === 32 : len >= 2 && len <= 40;
 }
 
 // The P2SH-P2WPKH script hash for a key hash: HASH160(0014 <h160>).

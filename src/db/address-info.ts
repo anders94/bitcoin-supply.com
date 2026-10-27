@@ -1,7 +1,7 @@
 import { Pool, PoolClient } from 'pg';
 import { pool } from './index.js';
 import {
-  siblingAddresses, forwardSiblings, addressPayload, hashPrefix, reverseIndexEntries, keyControls,
+  siblingAddresses, forwardSiblings, addressPayload, isValidAddress, hashPrefix, reverseIndexEntries, keyControls,
   type ExposureKind,
 } from '../classifiers/exposure.js';
 import { markAddressPubkeyExposed as markUtxosPubkey } from './utxos.js';
@@ -233,6 +233,7 @@ export async function markReceivedSiblings(
 export const KEYINDEX_BUILT_KEY = 'revealed_key_hashes_built_at';
 
 export interface QuantumStatus {
+  valid: boolean;              // false: not a valid address (checksum, typo)
   exposed: boolean;
   kind: ExposureKind | null;
   keys: string[];
@@ -254,11 +255,15 @@ export async function addressQuantumStatus(addr: string, addrInfo: any | null): 
   );
   const state = Object.fromEntries(st.map(r => [r.key, r.value]));
   const base = {
+    valid: isValidAddress(addr),
     singleKeyType: addressPayload(addr)?.type ?? null,
     fullCoverage: state[KEYINDEX_BUILT_KEY] != null,
     asOfBlock: state['last_synced_block'] != null ? Number(state['last_synced_block']) : null,
   };
 
+  if (!base.valid) {
+    return { ...base, exposed: false, kind: null, keys: [], block: null, via: null, recorded: false };
+  }
   if (addrInfo?.pubkey_exposed) {
     const kind: ExposureKind = addrInfo.exposure_kind ?? (addrInfo.is_p2pk ? 'p2pk' : 'pkh');
     let via: string | null = null;
