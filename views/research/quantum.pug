@@ -1,0 +1,307 @@
+extends ../layout
+include ../mixins
+include charts
+
+block content
+  article.research
+    .page-head
+      a.back-link(href='/research') ← RESEARCH
+      span.label RESEARCH · QUANTUM EXPOSURE
+      span.page-title Most exposed bitcoin isn’t Satoshi’s. It’s address reuse.
+
+    p.lede
+      | #[strong #{btcShort(exposed)} BTC], #{pct(sharePct(exposed))}% of all coins in existence, sits behind a public key that is already on the blockchain. A quantum computer able to run Shor’s algorithm at scale could derive those private keys and spend the coins. The early pay-to-pubkey outputs everyone talks about are only #{pct(sharePct(BigInt(q.p2pk.sats), exposed))}% of that. Most of the rest is ordinary coin at addresses that have spent before, or that share a key with one that has.
+
+    form.r-check(action='/search', method='POST')
+      input(type='search', name='query', placeholder='Paste a bitcoin address', autocomplete='off', spellcheck='false', aria-label='Bitcoin address to check')
+      button(type='submit') CHECK
+    .note--italic Checks every way a key can already be public: a spend from the address, the same key at its other address types and encodings, and keys inside P2PK, multisig and revealed scripts, from block 0 to block #{num(asOfBlock)}. Works for addresses that have never received coins.
+
+    .callout
+      strong If you hold bitcoin
+      ol
+        li Never reuse an address. Once an address has spent, its key is public; treat everything still there, or sent there later, as exposed.
+        li Keep long-term savings in an address that has #[em never] spent: P2WPKH (#[code bc1q…]) is the simplest choice.
+        li Don’t use one key under several address types. A fresh-looking address can share a key with one that already spent.
+        li Don’t share extended public keys (xpubs) or sign messages with savings keys; both reveal keys off-chain, where no one can check.
+        li Taproot (#[code bc1p…]) puts the key in the address itself. It is exposed from the moment it receives coins.
+      span(style='font-size:11px;color:var(--secondary)') The reasoning, and what no address type can protect against, is in #[a(href='#advice') section 06].
+
+    nav.r-toc(aria-label='On this page')
+      a(href='#how') #[span.n 01] How a key becomes public
+      a(href='#where') #[span.n 02] Where the exposed coin is
+      a(href='#concentration') #[span.n 03] A few keys hold most of it
+      a(href='#when') #[span.n 04] When the keys went public
+      a(href='#findings') #[span.n 05] Findings: how we found the half we missed
+      a(href='#advice') #[span.n 06] Which addresses keep a key hidden
+      a(href='#crosscheck') #[span.n 07] Cross-check: Project Eleven
+      a(href='#limits') #[span.n 08] Method and limits
+
+    section.r-sec#how
+      span.label 01 · MECHANISM
+      h2 How a key becomes public
+      .prose
+        p Bitcoin’s signatures are elliptic-curve signatures: the private key is a number, the public key a point derived from it. Deriving the number from the point is the problem a large quantum computer would solve. Most output types hide the point behind a hash until the coins are spent; a hash is not a target, because Shor’s algorithm needs the point itself. So the question for any coin is simply: #[em is its public key on the chain yet?]
+      .r-table
+        table.data-table
+          thead
+            tr
+              th Output type
+              th Looks like
+              th Key public
+              th What becomes public
+          tbody
+            tr
+              td.l Pay-to-pubkey (P2PK)
+              td no address
+              td at creation
+              td.l The key is the script (#[a(href='/proposals/015') 015])
+            tr
+              td.l Taproot (P2TR)
+              td bc1p…
+              td at creation
+              td.l The output key is a curve point (#[a(href='/proposals/019') 019])
+            tr
+              td.l Bare multisig (P2MS)
+              td no address
+              td at creation
+              td.l Every key in the script (#[a(href='/proposals/020') 020])
+            tr
+              td.l P2PKH, P2WPKH, P2SH-P2WPKH
+              td 1…, bc1q…, 3…
+              td first spend
+              td.l The one key (#[a(href='/proposals/016') 016])
+            tr
+              td.l P2SH, P2WSH
+              td 3…, bc1q… (long)
+              td first spend
+              td.l The whole script: every cosigner’s key (#[a(href='/proposals/021') 021])
+      .prose
+        p The rule that matters most is the one people forget: a reveal is permanent and covers the whole address. Coins that arrive at an address #[em after] it has spent are exposed the moment they land, and the same key used under a different address type is exposed too (#[a(href='/proposals/022') 022]).
+
+    section.r-sec#where
+      span.label 02 · DISTRIBUTION
+      h2 Where the exposed coin is
+      figure.r-fig
+        span.fig-title Share of exposed value vs share of exposed outputs
+        +pairbars(categoryBars.map(c => ({ label: c.k, wa: c.ws, wb: c.wc, va: `${pct(c.satsPct)}%`, vb: `${pct(c.countPct)}%`, title: `${c.k}: ${btc8(c.sats)} BTC in ${num(c.count)} outputs` })), 'share of BTC', 'share of outputs')
+        figcaption Both bars are percentages of their own total (#{btcShort(exposed)} BTC; #{num(exposedCount)} outputs), on one axis.
+      .prose
+        p Two categories hold almost all the value: key-hash addresses that have spent, and the original pay-to-pubkey outputs. Two others hold almost all the #[em outputs] and very little value. Taproot is over half of every exposed output but a few percent of the coin: the typical taproot output is 330 or 546 satoshis, the “postage” of an inscription. Bare multisig is #{num(q.p2ms.count)} outputs worth #{btcShort(q.p2ms.sats)} BTC in total, mostly data-carrying protocols such as Counterparty that used multisig scripts to embed data. Counting outputs would make taproot look like the problem; counting value shows it is not, yet.
+      .r-table
+        table.data-table
+          thead
+            tr
+              th Category
+              th Rules
+              th.num BTC
+              th.num Outputs
+          tbody
+            each c in categoryBars
+              tr
+                td.l= c.k
+                td= c.rules
+                td.num= btc8(c.sats)
+                td.num= num(c.count)
+            tr
+              td.l #[strong Total]
+              td
+              td.num #[strong= btc8(exposed)]
+              td.num #[strong= num(exposedCount)]
+      if q.mixed.sats !== '0'
+        .note--italic Inside the script figure, #{btc8(q.mixed.sats)} BTC at #{num(q.mixed.addrs)} addresses sits behind scripts that also have a hash-preimage branch (HTLC-style). Their keys are public and the usual timeout path needs only a signature, so they are counted, and listed separately so the caveat has a number.
+
+    section.r-sec#concentration
+      span.label 03 · CONCENTRATION
+      h2 A few keys hold most of it
+      if concentration.length
+        figure.r-fig
+          span.fig-title Cumulative share of exposed BTC, largest outputs first
+          +hbars(concentration.map(c => ({ label: `${num(c.outputs)} output${c.outputs == 1 ? '' : 's'} · ${num(c.keys)} address${c.keys == 1 ? '' : 'es'}`, w: c.pct, tone: 'purple', value: `${pct(c.pct)}%`, title: `${btc8(c.sats)} BTC; smallest output ${btc8(c.minSats)} BTC` })), [])
+          figcaption Exposed outputs ranked by size. “Addresses” counts distinct addresses, plus one for each addressless P2PK or multisig output: roughly, the number of keys an attacker would need to break.
+        .prose
+          p The single largest exposed output holds #[strong #{btcShort(concentration[0].sats)} BTC]. #{num(concentration[3] ? concentration[3].keys : 0)} addresses hold #{pct(concentration[3] ? concentration[3].pct : 0)}% of everything exposed; #{num(concentration[7] ? concentration[7].keys : 0)} hold #{pct(concentration[7] ? concentration[7].pct : 0)}%; the whole of it is spread across #{num(concentration[concentration.length - 1].keys)}. For an attacker whose machine is slow and expensive, that shape is the whole story: the first few hundred keys are worth more than the last several million combined. It is also why the #[a(href='/') homepage] slider sweeps the attack largest key first.
+          p Most of the top addresses are not abandoned coins. They look like large custodians and exchanges whose wallets reuse addresses or spend from multisig scripts, revealing the keys while balances keep flowing in. The largest exposed address, #[a(href='/address/34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo') 34xp4vRo…], has had its keys public since 2018.
+
+    section.r-sec#when
+      span.label 04 · HISTORY
+      h2 When the keys went public
+      if years
+        figure.r-fig
+          span.fig-title Exposed BTC still at its address, by the year its key was first revealed
+          .legend
+            span #[i.sw-purple] key hash (one key)
+            span #[i.sw-amber] script (all its keys)
+          +columns(years.rows.map(r => ({ x: `’${String(r.year).slice(2)}`, title: `${r.year}: ${btcShort(r.pkh)} BTC key hash, ${btcShort(r.script)} BTC script`, segs: [{ h: r.hp, tone: 'purple' }, { h: r.hs, tone: 'amber' }] })), years.ticks)
+          figcaption Spend-revealed coin only (P2PK, taproot and bare multisig are exposed from creation and have no reveal year). Address-level figures, recomputed daily; as of block #{num(years.asOfBlock)}.
+        .prose
+          p Exposure is not a relic of Bitcoin’s first years. #{pct(years.recentPct)}% of the spend-revealed balance belongs to keys first revealed in the last ten years, and the heaviest year is #{years.peakYear}. Every year adds more, as wallets spend from addresses that still hold, or will later receive, coins.
+      else
+        .note--italic This chart is being recomputed with a corrected year mapping and will appear after the next daily update.
+
+    section.r-sec#findings
+      span.label 05 · FINDINGS
+      h2 How we found the half we missed
+      .prose
+        p In October 2026 this site reported #[strong 3,575,929 BTC] exposed. Project Eleven’s independent Risq List reported #[strong 7,105,958 BTC] at the same height. Our pay-to-pubkey figure matched theirs to within about 460 BTC, so the gap was entirely in what we were not counting. Closing it is the most instructive thing we did.
+        span.r-dated Reconciliation of 2026-10-13
+      .r-table
+        table.data-table
+          thead
+            tr
+              th What we missed
+              th.num About
+              th Rule
+          tbody
+            tr
+              td.l Coins received at an address after its key was revealed
+              td.num 2.3M BTC
+              td #[a(href='/proposals/016') 016]
+            tr
+              td.l Script spends reveal every key in the script
+              td.num 1.9M BTC
+              td #[a(href='/proposals/021') 021]
+            tr
+              td.l Taproot outputs carry their key
+              td.num 0.22M BTC
+              td #[a(href='/proposals/019') 019]
+            tr
+              td.l Bare multisig carries its keys
+              td.num &lt; 0.001M BTC
+              td #[a(href='/proposals/020') 020]
+      .prose
+        h3 The biggest miss was time
+        p We flagged an address’s coins when it spent. Coins that arrived #[em afterwards] were never flagged, though they are exactly as exposed. That one omission was about 2.3M BTC, more than every pay-to-pubkey output combined. The fix now runs on every block: a payment to an already-exposed address is exposed on arrival.
+
+        h3 One spend from a multisig reveals everyone
+        p A P2SH or P2WSH spend publishes the whole redeem or witness script, and with it every cosigner’s key, not just the ones that signed. Finding them meant re-reading every script spend in the chain’s history, block by block over the node’s RPC interface, since the database keeps no spent inputs. That walk took days and found about 1.9M BTC. Scripts that also contain a hash-lock are counted but reported separately (above), because one of their spending paths needs a secret as well as a key.
+
+        h3 “Never spent” is not “safe”
+        p A single key has several addresses: P2PKH, P2WPKH and P2SH-wrapped P2WPKH, and two encodings (compressed and uncompressed) for older keys. Spend from any one and the key is public for all of them. A sweep for these siblings found #[strong 54,463 addresses holding 2,386 BTC] that had never spent but whose key was already public (block 973,321).
+        p The largest is a textbook case. In #[a(href='/transaction/1704a1753ed940901843a5747c9f891f926e1d7d06ec9e61833b440c1e6d53e9') one transaction] in #[a(href='/block/501886') block 501,886] (December 2017), #[a(href='/address/1D58NtxrZF4iUnGAFojnqNpPuGi9rrcyVf') 1D58Ntxr…] spent its whole 519.7 BTC balance, signing with its uncompressed key. The single output went to #[a(href='/address/1LRHPN36YQufar8gH4au2evXLeD5ddPJwY') 1LRHPN36…], a fresh address that has never spent, and which is the #[em compressed] form of the very same key. Moving coins to a new address is what careful holders are told to do; this move went nowhere at all.
+        span.r-dated Sweep of 2026-10-27, block 973,321
+      .r-table
+        table.data-table
+          thead
+            tr
+              th New address, relative to the one that revealed the key
+              th.num BTC
+              th How to catch it when funded
+          tbody
+            tr
+              td.l Same key hash; new address is P2PKH or P2WPKH
+              td.num 988
+              td.l Derive its siblings, look them up
+            tr
+              td.l Same key hash; new address is P2SH-P2WPKH
+              td.num 518
+              td.l Reverse index (a P2SH hash can’t be unwrapped)
+            tr
+              td.l Other encoding, or a key from a script, P2PK or multisig
+              td.num 880
+              td.l Reverse index
+      .prose
+        p Catching these when they are funded, not months later, needed an index running backwards from address to key: the hash of every public key ever revealed, in every form an address could take. It holds 1.88 billion entries (about 174 GB) and is checked for every address the moment it first receives coins, and for every address you paste above.
+        if reuse
+          p Live, #{btcShort(reuse.total_sats)} BTC sits at #{num(reuse.address_count)} such addresses (address-level, as of block #{num(reuseAsOf)}).
+
+        h3 Consensus, not policy
+        p Two corrections came from reading the consensus rules rather than the conventions. A 65-byte public key with prefix #[code 06] or #[code 07] (“hybrid”) is valid if the prefix matches the point’s parity; only relay policy rejects it. And the node labels a bare multisig “nonstandard” if any key is malformed, as in Counterparty’s 1-of-2 outputs where one “key” is a data push; one real key still spends it. Classifying by script shape instead of by the node’s label added 158,955 outputs (9.96 BTC).
+
+        h3 Lost coins are not exposed coins
+        p An off-curve “key” has no private key for any computer to find, so those outputs stay lost and out of the quantum figures. Outputs burned to a known unspendable point stay burned. Each coin is counted once.
+
+    section.r-sec#advice
+      span.label 06 · ADVICE
+      h2 Which addresses keep a key hidden
+      .prose
+        p The protection today is a hash: until an output is spent, most address types show only the hash of a key, and a quantum computer gains little against a hash. That protection lasts exactly until the first spend, and it only covers the key the hash belongs to.
+      .r-table
+        table.data-table
+          thead
+            tr
+              th Address type
+              th Prefix
+              th Before first spend
+              th After first spend
+          tbody
+            tr
+              td.l Native SegWit, single key (P2WPKH)
+              td bc1q… (42)
+              td hidden
+              td.l exposed, whole address
+            tr
+              td.l Legacy (P2PKH)
+              td 1…
+              td hidden
+              td.l exposed, whole address
+            tr
+              td.l Wrapped SegWit (P2SH-P2WPKH)
+              td 3…
+              td hidden
+              td.l exposed, whole address
+            tr
+              td.l Multisig (P2SH, P2WSH)
+              td 3…, bc1q… (62)
+              td hidden on-chain #[sup *]
+              td.l every cosigner’s key exposed
+            tr
+              td.l Taproot (P2TR)
+              td bc1p…
+              td #[strong exposed]
+              td.l exposed
+      .note--italic * Cosigners hold each other’s extended public keys, so multisig keys are known off-chain to everyone in the quorum.
+      .prose
+        p What follows from that:
+        ul
+          li #[strong One address, one receipt, one spend.] Modern wallets already send change to a fresh address. The risk is a #[em receiving] address used more than once: a published donation address, an exchange withdrawal address saved as a contact, a deposit address a payer keeps reusing.
+          li #[strong After any spend, move the rest.] If you spent part of the balance of an address, the remainder is exposed. Sweep it to a fresh, never-used address from a #[em different] key.
+          li #[strong A new address is only new if the key is new.] The 520 BTC case above was a “new” address with an old key. Wallet software that derives each address from a fresh key, as every modern HD wallet does, avoids it.
+          li #[strong Taproot is the newest address type and the most exposed at rest.] Its output key is the address. For coins you intend to leave untouched for years, a never-spent hashed address is the more conservative choice today.
+          li #[strong Keep keys off the internet.] An xpub given to a portfolio tracker or accounting service reveals every public key in that account; a signed message reveals the key that signed. None of that is visible on-chain, so no checker, including ours, can see it.
+          li #[strong No address type protects a spend in flight.] When you spend, your key sits in public transactions for minutes before confirmation. Protecting that window, and moving coins to a quantum-resistant output type, needs a protocol change; proposals such as BIP-360 are under discussion, and none is active today.
+          li #[strong Custodial balances aren’t yours to check.] Coins on an exchange sit at the exchange’s addresses, under its key management.
+
+    section.r-sec#crosscheck
+      span.label 07 · CROSS-CHECK
+      h2 Cross-check: Project Eleven
+      if q.p11
+        .r-table
+          table.data-table
+            thead
+              tr
+                th
+                th.num Ours (BTC)
+                th.num Theirs (BTC)
+                th.num Difference
+            tbody
+              each r in q.crossRows
+                tr
+                  td.l= r.k
+                  td.num= btcInt(r.ours)
+                  td.num= btcInt(r.theirs)
+                  td.num= (BigInt(r.diff) > 0 ? '+' : '') + btcInt(r.diff)
+        span.r-dated Theirs at block #{num(q.p11.block_height)}, fetched #{dateUtc(q.p11.fetched_at)} · ours at block #{num(asOfBlock)}
+      .prose
+        - var totalRow = q.crossRows.length ? q.crossRows[q.crossRows.length - 1] : null
+        - var gap = totalRow ? Math.abs(Number(totalRow.diff)) : null
+        p #[a(href='https://bitcoin-risq-list.projecteleven.com') Project Eleven’s Bitcoin Risq List] answers the same question with a different method: they count by address, in BigQuery; we count by output, from our own node.#{gap !== null ? ` The totals agree to within ${btcShort(String(gap))} BTC, ${pct(gap / Number(exposed) * 100)}% of the total,` : ' The totals agree closely,'} and the remaining difference is explained by the method rather than by missing coin:
+        ul
+          li They resolve each P2PK output to its P2PKH-form address and count that address’s whole balance; we count the output.
+          li They file every spent P2SH address, including wrapped single-key SegWit, under “script”; we file by what was revealed, so wrapped SegWit is a key hash here. Only the combined row compares like with like.
+          li Their multisig figure counts each cosigner key’s P2PKH-form address and its whole balance; those coins appear in our key-hash row instead.
+          li We count coins at other addresses of an already-public key (rule 022); they do not.
+        p Two independent methods landing on the same total is the strongest evidence we have that neither is missing a large category. We recompute the comparison every hour on the #[a(href='/quantum') quantum page].
+
+    section.r-sec#limits
+      span.label 08 · LIMITS
+      h2 Method and limits
+      .prose
+        p For any address, the check above looks for its public key in: spends from the address itself; spends from its sibling addresses (the other single-key address types, compressed and uncompressed, including the rare hybrid encoding); and keys published inside P2PK outputs, bare multisig outputs, revealed scripts and taproot outputs, all from block 0 to the latest indexed block (which trails the network by a few confirmations so a reorganisation can’t corrupt the totals).
+        p It cannot see:
+        ul
+          li keys disclosed off-chain, through xpubs, signed messages, or wallet services;
+          li keys revealed in transactions that are not yet confirmed;
+          li the keys inside a P2SH or P2WSH address that has never spent, even if those keys are public elsewhere: the script stays hidden until it is used.
+        p A clean result means no key for that address is public #[em on-chain]. It is a necessary condition for safety, not a guarantee.
+        p The rules: #[a(href='/proposals/015') 015], #[a(href='/proposals/016') 016], #[a(href='/proposals/019') 019], #[a(href='/proposals/020') 020], #[a(href='/proposals/021') 021], #[a(href='/proposals/022') 022]. The live figures and top addresses: #[a(href='/quantum') /quantum]. As data: #[a(href='/api/v1/quantum') /api/v1/quantum].

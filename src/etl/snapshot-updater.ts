@@ -94,12 +94,25 @@ async function scriptMixed(tipBlock: number): Promise<void> {
 // That is a full pass over address_info (~1.5B rows, 500 GB), so it runs at
 // most once a day; the endpoint used to do it on every cache miss.
 const ADDRESS_VIEW_MAX_AGE_MS = 23 * 60 * 60 * 1000;
+// Bump to force a recompute on the next run when the shape or method changes
+// (2: years from real block timestamps instead of block / 100000).
+const ADDRESS_VIEW_VERSION = 2;
 
 async function quantumAddressView(tipBlock: number): Promise<void> {
   const { rows: prev } = await pool.query(
-    `SELECT computed_at FROM computed_stats WHERE key = 'quantum_address_view'`
+    `SELECT computed_at, data->>'v' AS v FROM computed_stats WHERE key = 'quantum_address_view'`
   );
-  if (prev.length && Date.now() - new Date(prev[0].computed_at).getTime() < ADDRESS_VIEW_MAX_AGE_MS) return;
+  if (prev.length && Number(prev[0].v) === ADDRESS_VIEW_VERSION &&
+      Date.now() - new Date(prev[0].computed_at).getTime() < ADDRESS_VIEW_MAX_AGE_MS) return;
+
+  // First block of each calendar year (UTC), so a reveal height maps to its
+  // year exactly: width_bucket counts how many year starts it has passed.
+  const { rows: yearRows } = await pool.query(`
+    SELECT EXTRACT(YEAR FROM block_timestamp AT TIME ZONE 'UTC')::int AS y, MIN(block_number)::int AS first
+    FROM blocks GROUP BY 1 ORDER BY 1
+  `);
+  const firstYear: number = yearRows[0].y;
+  const yearStarts = yearRows.slice(1).map(r => r.first);
 
   // Legacy rows (pre-migration 008) resolve to p2pk / pkh. Only spend-revealed
   // keys have an exposure block (P2PK / P2TR / P2MS are exposed from creation),
@@ -107,13 +120,13 @@ async function quantumAddressView(tipBlock: number): Promise<void> {
   const { rows } = await pool.query(`
     SELECT COALESCE(exposure_kind, CASE WHEN is_p2pk THEN 'p2pk' ELSE 'pkh' END) AS kind,
            pubkey_exposed,
-           EXTRACT(YEAR FROM pubkey_exposed_at_block::float8 / 100000 * interval '1 year' + timestamp '2009-01-03')::int AS yr,
+           $1::int + width_bucket(pubkey_exposed_at_block, $2::bigint[]) AS yr,
            COUNT(*)::text AS n,
            COALESCE(SUM(utxo_value_sats), 0)::text AS sats
     FROM address_info
     WHERE utxo_count > 0 AND (pubkey_exposed OR pubkey_exposed_at_block IS NOT NULL)
     GROUP BY 1, 2, 3
-  `);
+  `, [firstYear, yearStarts]);
 
   const byKind = new Map<string, { n: bigint; sats: bigint }>();
   const byYear = new Map<string, { n: bigint; sats: bigint }>(); // `${class}:${yr}`
@@ -129,6 +142,7 @@ async function quantumAddressView(tipBlock: number): Promise<void> {
   }
 
   await upsertComputedStat('quantum_address_view', {
+    v: ADDRESS_VIEW_VERSION,
     addresses_by_kind: [...byKind].sort(([a], [b]) => a.localeCompare(b))
       .map(([kind, v]) => ({ kind, address_count: v.n.toString(), total_sats: v.sats.toString() })),
     by_exposure_year: [...byYear].map(([k, v]) => {
@@ -345,7 +359,8 @@ async function topLosses(tipBlock: number, breakdown: { rules: any[] }): Promise
     SELECT tx_hash, value_sats::text, block_number, loss_rules,
            EXTRACT(YEAR FROM block_timestamp)::int AS year
     FROM utxos WHERE loss_bucket IN (1, 2)
-    ORDER BY value_sats DESC LIMIT 25
+    -- Qualified: a bare name would sort by the ::text output column, as text.
+    ORDER BY utxos.value_sats DESC LIMIT 25
   `);
   const grouped = new Set(['000', '001', '003', '012']);
   for (const row of utxoRows) {
@@ -383,7 +398,7 @@ async function topLosses(tipBlock: number, breakdown: { rules: any[] }): Promise
     SELECT block_number, miner_loss_sats::text,
            EXTRACT(YEAR FROM block_timestamp)::int AS year
     FROM blocks WHERE miner_loss_sats > 0
-    ORDER BY miner_loss_sats DESC LIMIT 5
+    ORDER BY blocks.miner_loss_sats DESC LIMIT 5
   `);
   for (const row of minerRows) {
     entries.push({

@@ -22,9 +22,14 @@ by a sub-slider, range 1–20 years). These are queried dynamically:
 ```sql
 SELECT SUM(value_sats), COUNT(*)
 FROM utxos
-WHERE loss_bucket = 0
+WHERE loss_bucket IN (0, 4)
   AND block_timestamp <= NOW() - INTERVAL '$N years'
 ```
+
+Bucket 4 (key visible in the script, e.g. Satoshi-era P2PK) is spendable and so counts as
+dormant; lost buckets (1, 2) never do. Age is per output, from its creation block, not per
+address: dust sent to an old address would otherwise make its large, untouched coins look
+active.
 
 Pre-computed breakpoints (1y, 3y, 5y, 7y, 10y, 15y, 20y) are stored in `loss_snapshots`
 and updated hourly by the snapshot updater.

@@ -150,7 +150,8 @@ main .wrap { padding: 18px 18px 16px; display: flex; flex-direction: column; gap
 .site-footer .wrap {
   padding: 10px 18px;
   display: flex;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 6px 14px;
   align-items: baseline;
   font-family: var(--mono);
   font-size: 9px;
@@ -694,4 +695,163 @@ main .wrap { padding: 18px 18px 16px; display: flex; flex-direction: column; gap
 
   .site-footer { position: static; }
   .content-narrow { max-width: 640px; }
+}
+
+/* ---------- research (/research/*) ----------
+   Long-form prose with live figures. Charts are plain HTML bars (no chart
+   library, no client JS): they reflow at phone width, where an SVG's text
+   would shrink with its viewBox. Values ride the bars; title attributes give
+   the hover readout. */
+
+.research { display: flex; flex-direction: column; gap: 22px; max-width: 760px; }
+.research .lede { margin: 0; font-size: 14px; line-height: 1.55; color: var(--body-dark); }
+.research h2 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.3; }
+.research h3 { margin: 6px 0 0; font-size: 12.5px; font-weight: 600; line-height: 1.35; }
+.research .prose a, .research .callout a, .r-fig figcaption a {
+  text-decoration: underline;
+  text-decoration-color: var(--faded);
+  text-underline-offset: 2px;
+}
+.research .prose ul, .research .prose ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.research .prose code { font-family: var(--mono); font-size: 11px; }
+
+.r-sec {
+  border-top: 1px solid var(--ink);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-margin-top: 16px;
+}
+.r-dated { font-family: var(--mono); font-size: 8.5px; letter-spacing: .08em; color: var(--faded); text-transform: uppercase; }
+
+.r-toc { display: flex; flex-direction: column; font-family: var(--mono); font-size: 10px; }
+.r-toc a { display: flex; gap: 10px; padding: 4px 0; border-top: 1px dotted var(--dotted); color: var(--body); }
+.r-toc a:hover { color: var(--ink); }
+.r-toc .n { width: 18px; color: var(--faded); flex: none; }
+
+.r-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+}
+.r-stat { background: var(--paper); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.r-stat .k { font-family: var(--mono); font-size: 8.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--secondary); }
+.r-stat .v { font-family: var(--mono); font-size: 17px; font-weight: 500; color: var(--ink); }
+.r-stat .v--red { color: var(--red); }
+.r-stat .v--purple { color: var(--purple); }
+.r-stat .s { font-family: var(--mono); font-size: 9.5px; color: var(--faded); }
+
+.r-fig { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.r-fig .fig-title { font-family: var(--mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink); }
+.r-fig figcaption { font-size: 10px; font-style: italic; line-height: 1.45; color: var(--secondary); }
+
+/* Horizontal bars: label | track | value. Below 860px the label sits on its
+   own line above the track. */
+.hb {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 10px;
+  row-gap: 4px;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 9.5px;
+}
+.hb .l { grid-column: 1 / -1; color: var(--body); line-height: 1.3; margin-top: 4px; }
+.hb .t { position: relative; height: 12px; }
+.hb .f { position: absolute; left: 0; top: 0; bottom: 0; min-width: 2px; background: var(--ink); }
+.hb .f--red { background: var(--red); }
+.hb .f--purple { background: var(--purple); }
+.hb .f--amber { background: var(--amber); }
+.hb .t--pair { height: 14px; }
+.hb .t--pair .f { bottom: auto; height: 6px; }
+.hb .t--pair .f + .f { top: 8px; }
+.hb .v { text-align: right; white-space: nowrap; color: var(--ink); }
+.hb .v small { color: var(--faded); font-size: 9px; }
+.hb-pad { display: none; }
+.hb-axis { grid-column: 1; position: relative; height: 14px; border-top: 1px solid var(--border); font-size: 8.5px; color: var(--faded); }
+.hb-axis span { position: absolute; top: 2px; transform: translateX(-50%); }
+.hb-axis span:first-child { transform: none; }
+.hb-axis span:last-child { transform: translateX(-100%); }
+
+/* Columns (stacked by series), with recessive gridlines. */
+.cols { position: relative; height: 150px; display: flex; gap: 2px; align-items: stretch; border-bottom: 1px solid var(--ink); }
+.cols .c { flex: 1; display: flex; flex-direction: column-reverse; gap: 2px; min-width: 0; position: relative; z-index: 1; }
+.cols .seg { background: var(--ink); }
+.cols .seg--purple { background: var(--purple); }
+.cols .seg--amber { background: var(--amber); }
+.cols .gl { position: absolute; left: 0; right: 0; border-top: 1px solid var(--dotted); }
+.cols .gl span { position: absolute; left: 0; top: -12px; font-family: var(--mono); font-size: 8px; color: var(--faded); }
+.cols-x { display: flex; gap: 2px; font-family: var(--mono); font-size: 8px; color: var(--faded); }
+.cols-x span { flex: 1; text-align: center; min-width: 0; }
+.cols-v { display: flex; gap: 2px; font-family: var(--mono); font-size: 8.5px; color: var(--ink); }
+.cols-v span { flex: 1; text-align: center; min-width: 0; }
+
+/* The 21M frame: one bar, segments separated by a 2px paper gap. */
+.frame { display: flex; gap: 2px; height: 22px; }
+.frame span { display: block; min-width: 3px; }
+.frame .lost { background: var(--red); }
+.frame .exposed { background: var(--purple); }
+.frame .rest { background: var(--ink); }
+.frame .unmined { background: var(--stripe); }
+.legend .sw-purple { background: var(--purple); }
+.legend .sw-amber { background: var(--amber); }
+
+.r-table { overflow-x: auto; }
+.r-table .data-table td.l { font-family: var(--sans); font-size: 10.5px; }
+.heat td.cell { text-align: right; padding: 6px 8px; border: 2px solid var(--paper); }
+
+.callout {
+  border: 1px solid var(--ink);
+  background: var(--inset);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--body-dark);
+}
+.callout ol, .callout ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+
+.r-check { display: flex; gap: 6px; }
+.r-check input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  padding: 8px 10px;
+}
+.r-check input:focus { outline: none; border-color: var(--purple); }
+.r-check button {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .1em;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.r-cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.r-card { border: 1px solid var(--ink); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; color: var(--body-dark); }
+.r-card:hover { background: var(--inset); color: var(--body-dark); }
+.r-card .label { color: var(--ink); }
+.r-card .v { font-family: var(--mono); font-size: 15px; font-weight: 500; }
+.r-card .d { font-size: 11.5px; line-height: 1.5; }
+.r-card .go { font-family: var(--mono); font-size: 9px; letter-spacing: .1em; color: var(--secondary); }
+
+@media (min-width: 860px) {
+  .r-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .r-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hb { grid-template-columns: minmax(0, 15em) minmax(0, 1fr) auto; row-gap: 6px; }
+  .hb .l { grid-column: auto; margin-top: 0; }
+  .hb .hb-axis { grid-column: 2; }
+  .hb .hb-pad { display: block; }
 }

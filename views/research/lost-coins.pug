@@ -1,0 +1,143 @@
+extends ../layout
+include ../mixins
+include charts
+
+block content
+  article.research
+    .page-head
+      a.back-link(href='/research') ← RESEARCH
+      span.label RESEARCH · LOST COINS
+      span.page-title The certain part is a thousandth of the debatable part.
+
+    p.lede
+      | Only #[strong #{btcShort(provable)} BTC] can be shown, from the chain alone, to be gone for good: #{pct(sharePct(provable))}% of the coins in existence. Another #[strong #{btcShort(probableOnly)} BTC] sits where no one plausibly holds a key. Meanwhile #[strong #{btcShort(dormant10)} BTC] has not moved in ten years or more. The popular “millions of lost coins” lives entirely in that last number, and it is a measure of patience as much as of loss.
+
+    nav.r-toc(aria-label='On this page')
+      a(href='#scale') #[span.n 01] Certain, probable, dormant: the scale
+      a(href='#sources') #[span.n 02] Where certain losses come from
+      a(href='#findings') #[span.n 03] Findings that run against intuition
+      a(href='#dormancy') #[span.n 04] Dormancy: the big, debatable number
+      a(href='#limits') #[span.n 05] What we don’t count, and why
+
+    section.r-sec#scale
+      span.label 01 · THE SCALE
+      h2 Three numbers, three orders of magnitude apart
+      figure.r-fig
+        span.fig-title BTC, log scale
+        +hbars(scaleBars.rows.map(r => ({ label: r.label, w: r.w, tone: r.tone, value: `${btcShort(r.sats)} BTC`, title: `${r.label}: ${btc8(r.sats)} BTC` })), scaleBars.ticks)
+        figcaption Each gridline is ten times the last. On a linear axis the three red bars would be invisible next to the dormant ones.
+      .prose
+        p The red bars are claims we can defend line by line: each lost output matches a rule with a proof or a near-certainty behind it. The black bars are just elapsed time. Some of those coins are in lost wallets; some belong to people who are simply not selling; some are Satoshi’s. The chain cannot tell them apart, so this site never adds dormant coins to the lost total. It lets you choose how much dormancy to treat as loss on the #[a(href='/') homepage], and shows you the rule-backed figure separately.
+
+    section.r-sec#sources
+      span.label 02 · SOURCES
+      h2 One bug accounts for almost all of it
+      figure.r-fig
+        span.fig-title Provably lost BTC by rule
+        +hbars(provableBars.map(r => ({ label: r.minor ? `${r.title} (${r.rule})` : `${r.rule} · ${r.title}`, w: r.w, tone: 'red', value: r.minor ? `${btc8(r.sats)}` : `${btcShort(r.sats)} <small>${pct(r.pct)}%</small>`, title: `${r.title}: ${btc8(r.sats)} BTC in ${num(r.count)} outputs` })), [])
+        figcaption Linear scale. Rules holding under 1 BTC share a row; rule 009 matches the same 23 outputs as 003 and is not drawn twice.
+      .prose
+        p In 2011 a Mt. Gox wallet change produced outputs whose script asks for a public key hashing to #[em nothing]: an empty push where a 20-byte hash belongs. No key hashes to the empty string, so no signature can ever satisfy it. Those #{btcShort(provableBars[0] ? provableBars[0].sats : 0)} BTC are #{pct(provableBars[0] ? provableBars[0].pct : 0)}% of everything provably lost. Take that single mistake away and the provable total is about two hundred coins.
+        p Unclaimed miner rewards are separate: #[strong #{btcShort(minerLoss)} BTC] across #{num(minerBlocks)} blocks whose miners took less than they were owed. Most of those blocks are from 2012 and each gave up a little; the largest single loss is #[a(href='/block/501726') block 501,726] in December 2017, whose miner claimed nothing at all and left the full 12.5 BTC subsidy unissued. That coin was never created, so it is not in any output, and we report it beside the provable total rather than inside it.
+      .r-table
+        table.data-table
+          thead
+            tr
+              th Rule
+              th What
+              th Verdict
+              th.num BTC
+              th.num Outputs
+              th Years
+          tbody
+            each r in rules
+              tr
+                td #[a(href=`/proposals/${r.rule}`)= r.rule]
+                td.l
+                  | #{r.title}
+                  if r.overlap
+                    span(style='color:var(--faded)')  · same outputs as #{r.overlap}
+                td= r.category === 'provable' ? 'provable' : 'probable'
+                td.num= btc8(r.sats)
+                td.num= num(r.count)
+                td= r.years
+            tr
+              td #[a(href='/proposals/002') 002]
+              td.l Unclaimed miner reward (never created)
+              td provable
+              td.num= btc8(minerLoss)
+              td.num #{num(minerBlocks)} blocks
+              td 2011–
+      .note--italic Live at block #{num(asOfBlock)}. Rules that currently match nothing (008, 013) are omitted. An output can match more than one rule; the totals above count each output once.
+
+    section.r-sec#findings
+      span.label 03 · FINDINGS
+      h2 Findings that run against intuition
+      .prose
+        p Most of what we learned came from edge cases: places where “obviously lost” turned out to be spendable, or the reverse. Each links to the rule that encodes it.
+
+        h3 The first 50 bitcoin cannot be spent; the genesis address can
+        p The reward in block 0 was never added to the spendable set. Whether by design or accident, no node will accept a spend of it (#[a(href='/proposals/000') 000]). But the #[em address] of that key, #[a(href='/address/1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa') 1A1zP1eP…], has since received about 57.7 BTC of tributes in more than 81,000 small payments. Those are ordinary, spendable coins, and because the genesis public key has been public since 2009, they are also quantum-exposed (#[a(href='/proposals/022') 022]).
+
+        h3 Two transactions were overwritten by their own twins
+        p Early coinbase transactions could be byte-identical, giving two blocks the same transaction ID. Blocks 91,722 and 91,880 did it, as did 91,812 and 91,842. The spendable set holds one output per ID, so the second coinbase replaced the first and 100 BTC simply ceased to exist (#[a(href='/proposals/001') 001]). BIP 30 and later BIP 34 closed the hole.
+
+        h3 Counting outputs is a trap; counting value is not
+        p OP_RETURN outputs are unspendable by definition, and there are hundreds of millions of them. Almost all carry zero value: they are data, not money. Before we excluded zero-value outputs, about 238 million of them dominated every loss count while adding nothing to the total. Only OP_RETURN outputs that actually #[em burned] value count (#[a(href='/proposals/004') 004]), and every figure on this site is weighted by value.
+
+        h3 “Anyone can spend it” does not mean it isn’t lost
+        p An output locked by #[code OP_TRUE] can be taken by anyone. If it is still sitting there years later, it is because it is not worth the fee, or because it was a deliberate offering; either way it is not coming back into circulation (#[a(href='/proposals/013') 013], once three years old). The converse trap: outputs paying to witness versions 2 to 16 look unspendable, but are reserved for future upgrades and are anyone-can-spend today, so they are #[em not] lost (#[a(href='/proposals/008') 008] counts only version-0 programs of an impossible length).
+
+        h3 A branch that never runs can still kill a script
+        p #[code OP_VERIF] and #[code OP_VERNOTIF] fail a script even inside an #[code OP_IF] branch that is never executed, because the interpreter rejects them before it checks the condition. A script can therefore look perfectly spendable down its live path and still be dead (#[a(href='/proposals/011') 011]).
+
+        h3 A coin we called provably lost was spendable
+        p A public key must be a point on the secp256k1 curve; a “key” that is not on it has no private key, and the coin is gone (#[a(href='/proposals/005') 005]). We tested 65-byte keys only in their usual #[code 04] form. But consensus also accepts “hybrid” keys with prefix #[code 06] or #[code 07] when the prefix matches the parity of the point’s y coordinate; only relay policy rejects them. One output, 2,817 satoshis from block 707,034, was spendable after all, and moved to the quantum lens on 2026-10-27. Small, but it is the difference between a rule that is right and one that is usually right.
+
+        h3 Burned, and yet a quantum computer could recover it
+        p Some outputs pay to a “nothing up my sleeve” point, such as BIP 341’s standard unspendable key, that nobody can sign for (#[a(href='/proposals/018') 018]). They count as probably lost. Uniquely among burns, they are on the curve and their key is visible, so a quantum computer could in principle claim them. We keep them in the burned bucket and out of the quantum figures: a coin is counted once.
+
+        h3 The biggest burn address is only “probably” lost
+        p The address whose hash is twenty zero bytes, #[a(href='/address/1111111111111111111114oLvT2') 1111111111111111111114oLvT2], holds about 810 BTC in over 390,000 outputs. Nobody will ever find a key that hashes to zero, but nobody can #[em prove] it either, so it is the largest entry in the probable column (#[a(href='/proposals/012') 012]), not the provable one.
+
+    section.r-sec#dormancy
+      span.label 04 · DORMANCY
+      h2 Dormancy: the big, debatable number
+      figure.r-fig
+        span.fig-title BTC untouched for at least N years
+        +columns(dormantCols.map(d => ({ x: `${d.years}y`, title: `Untouched ${d.years}+ years: ${btc8(d.sats)} BTC in ${num(d.count)} outputs (${pct(d.pct)}% of supply)`, segs: [{ h: d.h }] })), [])
+        .cols-v
+          each d in dormantCols
+            span #{btcShort(d.sats)}
+        figcaption Spendable coin only (lost outputs excluded); age is the time since the output was created.
+      .prose
+        p Almost two-thirds of all bitcoin has not moved in a year; about #{pct(sharePct(dormant10))}% has not moved in ten. Where to draw the line between “holding” and “lost” is a judgment, which is why the homepage hands it to you as a slider instead of picking a number.
+        h3 Age belongs to the output, not the address
+        p Address activity is a misleading clock. The address #[a(href='/address/1FeexV6bAHb8ybZjqQMjJrcCrHGW9sb6uF') 1FeexV6b…] has held about 79,957 BTC since 2011, but strangers keep sending it dust, so by “last activity” it looks busy this week. Measured per output, its big coins are fifteen years old. Every dormancy figure here is computed that way.
+        h3 Satoshi’s coins are dormant, exposed, and not lost
+        p Roughly 1.1M BTC mined in Bitcoin’s first year and a half carries a distinctive mining pattern attributed to Satoshi Nakamoto and has never moved (#[a(href='/proposals/017') 017]). The attribution is statistical, not proven. Those coins sit in pay-to-pubkey outputs, so they show up in the dormancy figures and in the quantum-exposed total, but not as lost: an owner with the keys could move them tomorrow.
+      if matrix
+        figure.r-fig
+          span.fig-title Where the coin sits: value of output × age (BTC)
+          .r-table
+            table.data-table.heat
+              thead
+                tr
+                  th Output size
+                  each a in matrix.ageBands
+                    th.num= a
+              tbody
+                each row, i in matrix.cells
+                  tr
+                    td= matrix.valueBands[i]
+                    each c in row
+                      - var alpha = 0.06 + c.a * 0.8
+                      td.cell(style=`background:rgba(27,26,22,${alpha.toFixed(3)});color:${alpha > 0.45 ? 'var(--paper)' : 'var(--ink)'}`, title=`${num(c.count)} outputs`)= btcShort(c.sats)
+          figcaption Darker is more BTC (hover a cell for its output count). Most coin by value sits in large, young outputs: exchanges and custodians moving funds. In the ten-year column the 1–100 BTC band dominates; that is where the 50 BTC block rewards of 2009 and 2010 still sit.
+
+    section.r-sec#limits
+      span.label 05 · LIMITS
+      h2 What we don’t count, and why
+      .prose
+        p Most real-world loss is invisible to the chain. A hard drive in a landfill, a forgotten passphrase, an heir who never learned the seed, an exchange that collapsed with its keys: the coins still exist, perfectly spendable, and look exactly like coins whose owner is patient. We have no rule that can tell them apart, so we don’t pretend to. The dormancy figures are the only honest on-chain proxy, and they are labelled as such.
+        p What we do count, we try to count exactly: every rule is a #[a(href='/proposals') public proposal], challenges happen in the open, and when we find we were wrong, the figure changes and the proposal says so.

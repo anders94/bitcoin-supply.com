@@ -7,6 +7,7 @@ import { pool } from '../db/index.js';
 import { getAllSnapshots } from '../db/snapshots.js';
 import { getComputedStats } from '../db/computed-stats.js';
 import { addressQuantumStatus } from '../db/address-info.js';
+import { isValidAddress } from '../classifiers/exposure.js';
 import { getCachedRawTransaction } from '../services/tx-data.js';
 import { getTip } from '../services/tip.js';
 import { loadBlock } from '../services/block-data.js';
@@ -17,7 +18,7 @@ import {
 } from '../helpers/format.js';
 import {
   RULE_CHIP_LABELS, BREAKDOWN_GROUPS, ruleCategory, CATEGORY_CHIP_CLASS, safeJson,
-  EXPOSURE_KIND_CHIP, EXPOSURE_KIND_TEXT,
+  EXPOSURE_KIND_CHIP, EXPOSURE_KIND_TEXT, RULE_TITLES,
 } from '../helpers/breakdown.js';
 
 const router = Router();
@@ -574,6 +575,47 @@ router.get('/address/:addr', async (req: Request, res: Response) => {
 });
 
 // GET /quantum - Quantum exposure explorer
+// The quantum figures shared by /quantum and /research/quantum, all from the
+// hourly snapshot: per-category totals, the mixed-script caveat and the
+// Project Eleven comparison.
+function quantumFigures(snapshots: Record<string, any>, stats: Record<string, any>) {
+  const snapOf = (key: string) => ({
+    sats: (snapshots[key]?.total_sats ?? 0n).toString(),
+    count: (snapshots[key]?.utxo_count ?? 0n).toString(),
+    present: snapshots[key] != null,
+  });
+  const all = snapOf('quantum_all_exposed');
+  const p2pk = snapOf('quantum_p2pk');
+  const p2tr = snapOf('quantum_p2tr');
+  const p2ms = snapOf('quantum_p2ms');
+  const script = snapOf('quantum_exposed_script');
+  const pkh = snapshots['quantum_exposed_pkh']
+    ? snapOf('quantum_exposed_pkh')
+    : { sats: (BigInt(all.sats) - BigInt(p2pk.sats)).toString(), count: '0', present: false };
+
+  // Mixed-script balances (keys revealed, but a hash-preimage branch exists)
+  // are inside the script total; surfaced so the caveat is quantifiable.
+  // From the hourly snapshot: the live query takes minutes on a cold cache.
+  const mixedStat = stats['quantum_script_mixed']?.data;
+  const mixed = { sats: mixedStat?.sats ?? '0', addrs: mixedStat?.addrs ?? '0' };
+
+  // Project Eleven splits spent-and-revealed addresses by address type (all
+  // P2SH, including P2SH-P2WPKH, is "script"); we split by what was revealed.
+  // Only the combined figure is comparable, so that is the row shown.
+  const p11 = stats['p11_crosscheck']?.data ?? null;
+  const sum = (...xs: (string | undefined)[]) => xs.reduce((s, x) => s + BigInt(x ?? 0), 0n).toString();
+  const crossRows = p11 ? [
+    { k: 'P2PK', ours: p2pk.sats, theirs: p11.p2pk_sats },
+    { k: 'P2TR', ours: p2tr.sats, theirs: p11.p2tr_sats },
+    { k: 'P2MS', ours: p2ms.sats, theirs: p11.p2ms_sats },
+    { k: 'revealed by a spend (key hash + script)', ours: sum(pkh.sats, script.sats),
+      theirs: sum(p11.pkh_reuse_sats, p11.script_reuse_sats) },
+    { k: 'total', ours: all.sats, theirs: p11.total_sats },
+  ].map(r => ({ ...r, diff: (BigInt(r.ours) - BigInt(r.theirs ?? 0)).toString() })) : [];
+
+  return { all, p2pk, p2tr, p2ms, pkh, script, mixed, p11, crossRows };
+}
+
 router.get('/quantum', async (req: Request, res: Response) => {
   try {
     const snapshots = await getAllSnapshots();
@@ -589,38 +631,7 @@ router.get('/quantum', async (req: Request, res: Response) => {
       ...r, chip: EXPOSURE_KIND_CHIP[r.exposure_kind] ?? 'Q-EXPOSED',
     }));
 
-    // Mixed-script balances (keys revealed, but a hash-preimage branch exists)
-    // are inside the script total; surfaced so the caveat is quantifiable.
-    // From the hourly snapshot: the live query takes minutes on a cold cache.
-    const mixedStat = stats['quantum_script_mixed']?.data;
-
-    const snapOf = (key: string) => ({
-      sats: (snapshots[key]?.total_sats ?? 0n).toString(),
-      count: (snapshots[key]?.utxo_count ?? 0n).toString(),
-      present: snapshots[key] != null,
-    });
-    const all = snapOf('quantum_all_exposed');
-    const p2pk = snapOf('quantum_p2pk');
-    const p2tr = snapOf('quantum_p2tr');
-    const p2ms = snapOf('quantum_p2ms');
-    const script = snapOf('quantum_exposed_script');
-    const pkh = snapshots['quantum_exposed_pkh']
-      ? snapOf('quantum_exposed_pkh')
-      : { sats: (BigInt(all.sats) - BigInt(p2pk.sats)).toString(), count: '0', present: false };
-
-    // Project Eleven splits spent-and-revealed addresses by address type (all
-    // P2SH, including P2SH-P2WPKH, is "script"); we split by what was revealed.
-    // Only the combined figure is comparable, so that is the row shown.
-    const p11 = stats['p11_crosscheck']?.data ?? null;
-    const sum = (...xs: (string | undefined)[]) => xs.reduce((s, x) => s + BigInt(x ?? 0), 0n).toString();
-    const crossRows = p11 ? [
-      { k: 'P2PK', ours: p2pk.sats, theirs: p11.p2pk_sats },
-      { k: 'P2TR', ours: p2tr.sats, theirs: p11.p2tr_sats },
-      { k: 'P2MS', ours: p2ms.sats, theirs: p11.p2ms_sats },
-      { k: 'revealed by a spend (key hash + script)', ours: sum(pkh.sats, script.sats),
-        theirs: sum(p11.pkh_reuse_sats, p11.script_reuse_sats) },
-      { k: 'total', ours: all.sats, theirs: p11.total_sats },
-    ].map(r => ({ ...r, diff: (BigInt(r.ours) - BigInt(r.theirs ?? 0)).toString() })) : [];
+    const { all, p2pk, p2tr, p2ms, pkh, script, mixed, p11, crossRows } = quantumFigures(snapshots, stats);
 
     res.locals.meta.description =
       `${btc2(all.sats)} BTC sits in outputs whose public keys are already visible ` +
@@ -630,7 +641,7 @@ router.get('/quantum', async (req: Request, res: Response) => {
     res.render('quantum', {
       title: 'Quantum exposure',
       all, p2pk, p2tr, p2ms, pkh, script,
-      mixed: { sats: mixedStat?.sats ?? '0', addrs: mixedStat?.addrs ?? '0' },
+      mixed,
       topExposed,
       crosscheck: p11, crossRows,
       ...viewHelpers,
@@ -638,6 +649,260 @@ router.get('/quantum', async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     renderError(res, 500, 'Failed to load quantum page');
+  }
+});
+
+// ---------- /research: the findings, in prose ----------
+//
+// Live figures for the write-up. Everything comes from the hourly snapshot
+// (loss_snapshots, computed_stats); nothing here touches utxos or
+// address_info, so each page costs two small reads. Findings tied to one
+// investigation are written into the templates with their block height.
+
+const RESEARCH_STATS = ['rule_breakdown', 'age_value_matrix', 'quantum_curve',
+  'quantum_address_view', 'quantum_script_mixed', 'p11_crosscheck'];
+
+const satsToBtc = (sats: bigint | string) => Number(BigInt(sats)) / 1e8;
+
+// Percent of whole, as a number (0.0140 for 0.014%).
+const share = (part: bigint, whole: bigint) =>
+  whole > 0n ? Number((part * 100_000_000n) / whole) / 1_000_000 : 0;
+
+// Bar geometry for a horizontal bar chart. Linear by default; log spans whole
+// decades so the ticks land on 10 / 100 / 1K ... and a 2,811 BTC bar can sit
+// on the same axis as a 3.6M one.
+function barScale(values: number[], log = false) {
+  const max = Math.max(...values, 0);
+  if (!log) return { pos: (v: number) => max > 0 ? (v / max) * 100 : 0, ticks: [] as { pos: number; label: string }[] };
+  const positive = values.filter(v => v > 0);
+  const lo = Math.floor(Math.log10(Math.min(...positive)));
+  const hi = Math.ceil(Math.log10(max));
+  const pos = (v: number) => v > 0 ? ((Math.log10(v) - lo) / (hi - lo)) * 100 : 0;
+  const ticks = [];
+  for (let d = lo; d <= hi; d++) ticks.push({ pos: ((d - lo) / (hi - lo)) * 100, label: compactNum(10 ** d) });
+  return { pos, ticks };
+}
+
+function compactNum(n: number): string {
+  if (n >= 1e6) return `${+(n / 1e6).toFixed(n >= 1e7 ? 0 : 2)}M`;
+  if (n >= 1e3) return `${+(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}K`;
+  return `${+n.toFixed(n >= 1 ? 0 : 2)}`;
+}
+
+// Display helpers for the research views (on top of viewHelpers).
+const researchHelpers = {
+  // 7.15M / 130,010 / 2,811 / 28.96 / 0.0172 — enough precision to read, none to spare.
+  btcShort: (sats: bigint | string) => {
+    const b = satsToBtc(sats);
+    if (b >= 1e6) return `${(b / 1e6).toFixed(2)}M`;
+    if (b >= 100) return Math.round(b).toLocaleString('en-US');
+    if (b >= 1) return b.toFixed(2);
+    return b.toPrecision(3);
+  },
+  pct: (n: number) => n >= 1 ? n.toFixed(1) : n >= 0.1 ? n.toFixed(2) : n.toPrecision(2),
+  // Whole BTC, grouped, signed: for side-by-side comparisons.
+  btcInt: (sats: bigint | string) => Math.round(satsToBtc(sats)).toLocaleString('en-US'),
+  compactNum,
+};
+
+async function researchData() {
+  const snapshots = await getAllSnapshots();
+  const stats = await getComputedStats(RESEARCH_STATS);
+  const sats = (key: string): bigint => BigInt(snapshots[key]?.total_sats ?? 0n);
+  const count = (key: string): bigint => BigInt(snapshots[key]?.utxo_count ?? 0n);
+  const asOfBlock = snapshots['all_utxos']?.computed_at_block ?? null;
+
+  const supply = sats('all_utxos');
+  const provable = sats('provably_lost');
+  const probable = sats('probably_lost');          // includes provable
+  const breakdown = stats['rule_breakdown']?.data;
+  const minerLoss = BigInt(breakdown?.miner_loss?.total_sats ?? 0);
+  const minerBlocks = Number(breakdown?.miner_loss?.block_count ?? 0);
+  const dormant = DORMANCY_YEARS
+    .map(y => ({ years: y, sats: sats(`dormant_${y}y`), count: count(`dormant_${y}y`) }))
+    .filter(d => d.sats > 0n);
+  const dormant10 = sats('dormant_10y');
+  const dormant15 = sats('dormant_15y');
+
+  const q = quantumFigures(snapshots, stats);
+  const exposed = BigInt(q.all.sats);
+  const exposedCount = BigInt(q.all.count);
+
+  // The 21M frame: what exists, split by fate, plus what is not yet mined.
+  const lost = probable;
+  const frame = [
+    { key: 'lost', label: 'Lost (provably or probably)', sats: lost },
+    { key: 'exposed', label: 'Quantum-exposed', sats: exposed },
+    { key: 'rest', label: 'Neither', sats: supply - lost - exposed },
+    { key: 'unmined', label: 'Not yet mined', sats: CAP_SATS - supply },
+  ].map(f => ({ ...f, pct: share(f.sats, CAP_SATS) }));
+
+  // Every rule that tags lost outputs. 015 is the P2PK quantum rule riding on
+  // lost P2PK outputs (genesis, the duplicate coinbases) and is left out; 009
+  // matches the same 23 outputs as 003. Totals count each output once.
+  const rules = (breakdown?.rules ?? [])
+    .filter((r: any) => r.rule !== '015')
+    .map((r: any) => ({
+      rule: r.rule,
+      title: RULE_TITLES[r.rule] ?? r.rule,
+      category: ruleCategory(r.rule),
+      sats: BigInt(r.total_sats),
+      count: BigInt(r.utxo_count),
+      years: r.first_year === r.last_year ? `${r.first_year}` : `${r.first_year}–${r.last_year}`,
+      overlap: r.rule === '009' ? '003' : null,
+    }))
+    .sort((a: any, b: any) => (b.sats > a.sats ? 1 : b.sats < a.sats ? -1 : 0));
+  // Rules holding under 1 BTC are folded into one row: five of them together
+  // are a fraction of a coin, and their percentages would read as noise.
+  const provableAll = rules.filter((r: any) => r.category === 'provable' && !r.overlap);
+  const minor = provableAll.filter((r: any) => r.sats < 100_000_000n);
+  const provableRules = [
+    ...provableAll.filter((r: any) => r.sats >= 100_000_000n),
+    ...(minor.length ? [{
+      rule: minor.map((r: any) => r.rule).join(' '),
+      title: `${minor.length} other rules`,
+      sats: minor.reduce((a: bigint, r: any) => a + r.sats, 0n),
+      count: minor.reduce((a: bigint, r: any) => a + r.count, 0n),
+      minor: true,
+    }] : []),
+  ];
+  const provableScale = barScale(provableRules.map((r: any) => satsToBtc(r.sats)));
+  const provableBars = provableRules.map((r: any) => ({ ...r, w: provableScale.pos(satsToBtc(r.sats)), pct: share(r.sats, provable) }));
+
+  // Certain vs debatable, on one log axis.
+  const scaleRows = [
+    { label: 'Provably lost', sats: provable, tone: 'red' },
+    { label: 'Probably lost (incl. provable)', sats: probable, tone: 'red' },
+    { label: 'Never created: unclaimed miner rewards', sats: minerLoss, tone: 'red' },
+    { label: 'Untouched 15+ years', sats: dormant15, tone: 'ink' },
+    { label: 'Untouched 10+ years', sats: dormant10, tone: 'ink' },
+  ];
+  const lossScale = barScale(scaleRows.map(r => satsToBtc(r.sats)), true);
+  const scaleBars = { rows: scaleRows.map(r => ({ ...r, w: lossScale.pos(satsToBtc(r.sats)) })), ticks: lossScale.ticks };
+
+  const dormantScale = barScale(dormant.map(d => satsToBtc(d.sats)));
+  const dormantCols = dormant.map(d => ({ ...d, h: dormantScale.pos(satsToBtc(d.sats)), pct: share(d.sats, supply) }));
+
+  // Age x value matrix (value bands x age bands), shaded by BTC.
+  const m = stats['age_value_matrix']?.data;
+  const matrix = m ? (() => {
+    const btc = m.btc.map((row: string[]) => row.map(v => BigInt(v)));
+    const max = btc.flat().reduce((a: bigint, b: bigint) => (b > a ? b : a), 0n);
+    return {
+      valueBands: ['≥ 100 BTC', '1–100 BTC', '0.01–1 BTC', '< 0.01 BTC'],
+      ageBands: ['< 1 year', '1–5 years', '5–10 years', '≥ 10 years'],
+      cells: btc.map((row: bigint[], i: number) => row.map((v: bigint, j: number) => ({
+        sats: v, count: BigInt(m.count[i][j]), a: max > 0n ? Number((v * 1000n) / max) / 1000 : 0,
+      }))),
+    };
+  })() : null;
+
+  // Exposed coin by category: share of value vs share of outputs.
+  const categories = [
+    { k: 'Key hash: P2PKH, P2WPKH, P2SH-P2WPKH', rules: '016 · 022', ...q.pkh },
+    { k: 'Pay-to-pubkey (P2PK)', rules: '015', ...q.p2pk },
+    { k: 'Script: P2SH, P2WSH', rules: '021', ...q.script },
+    { k: 'Taproot (P2TR)', rules: '019', ...q.p2tr },
+    { k: 'Bare multisig (P2MS)', rules: '020', ...q.p2ms },
+  ].map(c => ({
+    ...c,
+    satsPct: share(BigInt(c.sats), exposed),
+    countPct: share(BigInt(c.count), exposedCount),
+  }));
+  const catMax = Math.max(...categories.flatMap(c => [c.satsPct, c.countPct]));
+  const categoryBars = categories.map(c => ({ ...c, ws: (c.satsPct / catMax) * 100, wc: (c.countPct / catMax) * 100 }));
+
+  // Concentration: the outputs ranked largest first, cumulative share of the
+  // exposed total, and the addresses (or keyless outputs) they belong to.
+  const curve = stats['quantum_curve']?.data;
+  const curveTotal = BigInt(curve?.total_sats ?? 0);
+  const concentration = (curve?.breakpoints ?? []).map((bp: any) => ({
+    keys: BigInt(bp.key_count),
+    outputs: BigInt(bp.utxo_count),
+    sats: BigInt(bp.cum_sats),
+    minSats: BigInt(bp.min_value_sats),
+    pct: share(BigInt(bp.cum_sats), curveTotal),
+  // The curve also breaks at whole-coinbase values (50 BTC); a point less than
+  // a percentage point past its neighbour adds a row and no information.
+  })).filter((c: any, i: number, all: any[]) => i === 0 || i === all.length - 1 || c.pct - all[i - 1].pct >= 1);
+
+  // Exposed balance by the year the key went public (spend-revealed only).
+  // Version 1 of this stat mapped heights to years wrongly; hide it until the
+  // ETL has recomputed it.
+  const view = stats['quantum_address_view'];
+  const years = view?.data?.v === 2 ? (() => {
+    const by = new Map<number, { pkh: bigint; script: bigint }>();
+    for (const r of view.data.by_exposure_year) {
+      const y = Number(r.yr);
+      const acc = by.get(y) ?? { pkh: 0n, script: 0n };
+      acc[r.class === 'script' ? 'script' : 'pkh'] += BigInt(r.total_sats);
+      by.set(y, acc);
+    }
+    const ys = [...by.keys()].sort((a, b) => a - b);
+    const rows = [];
+    for (let y = ys[0]; y <= ys[ys.length - 1]; y++) rows.push({ year: y, ...(by.get(y) ?? { pkh: 0n, script: 0n }) });
+    const max = Math.max(...rows.map(r => satsToBtc(r.pkh + r.script)));
+    const ticks = [0.25, 0.5, 0.75, 1].map(f => ({ pos: f * 100, label: compactNum(max * f) }));
+    const total = rows.reduce((a, r) => a + r.pkh + r.script, 0n);
+    const last = rows[rows.length - 1].year;
+    const recent = rows.filter(r => r.year > last - 10).reduce((a, r) => a + r.pkh + r.script, 0n);
+    const peak = rows.reduce((a, r) => (r.pkh + r.script > a.pkh + a.script ? r : a));
+    return {
+      rows: rows.map(r => ({ ...r, hp: (satsToBtc(r.pkh) / max) * 100, hs: (satsToBtc(r.script) / max) * 100 })),
+      ticks, asOfBlock: view.computed_at_block,
+      recentPct: share(recent, total), peakYear: peak.year,
+    };
+  })() : null;
+  const reuse = (view?.data?.addresses_by_kind ?? []).find((k: any) => k.kind === 'reuse') ?? null;
+  const reuseAsOf = view?.computed_at_block ?? null;
+
+  return {
+    asOfBlock, supply, capPct: share(supply, CAP_SATS), provable, probable, probableOnly: probable - provable, minerLoss, minerBlocks,
+    dormant10, dormant15, exposed, exposedCount, frame, rules, provableBars, scaleBars, dormantCols,
+    matrix, categoryBars, concentration, years, reuse, reuseAsOf, q,
+    sharePct: (part: bigint, whole: bigint = supply) => share(part, whole),
+  };
+}
+
+router.get('/research', async (req: Request, res: Response) => {
+  try {
+    const d = await researchData();
+    res.locals.meta.description =
+      'What bitcoin-supply.com measures and what it found: how much of the 21M cap is ' +
+      'lost (provably, probably, or just dormant) and how much sits behind public keys ' +
+      'a quantum computer could break, computed output by output.';
+    res.render('research/index', { title: 'Research', ...d, ...viewHelpers, ...researchHelpers });
+  } catch (err) {
+    console.error(err);
+    renderError(res, 500, 'Failed to load research page');
+  }
+});
+
+router.get('/research/lost-coins', async (req: Request, res: Response) => {
+  try {
+    const d = await researchData();
+    res.locals.meta.description =
+      `Only ${researchHelpers.btcShort(d.provable)} BTC is provably lost; ` +
+      `${researchHelpers.btcShort(d.dormant10)} BTC has not moved in a decade. ` +
+      'The findings behind both numbers, rule by rule, and why the gap matters.';
+    res.render('research/lost-coins', { title: 'Lost coins', ...d, ...viewHelpers, ...researchHelpers });
+  } catch (err) {
+    console.error(err);
+    renderError(res, 500, 'Failed to load research page');
+  }
+});
+
+router.get('/research/quantum', async (req: Request, res: Response) => {
+  try {
+    const d = await researchData();
+    res.locals.meta.description =
+      `${researchHelpers.btcShort(d.exposed)} BTC sits behind public keys already on-chain. ` +
+      'Where it is, how we measured it, how to check your own addresses, and which ' +
+      'address types keep a key hidden.';
+    res.render('research/quantum', { title: 'Quantum exposure research', ...d, ...viewHelpers, ...researchHelpers });
+  } catch (err) {
+    console.error(err);
+    renderError(res, 500, 'Failed to load research page');
   }
 });
 
@@ -801,6 +1066,9 @@ router.get('/sitemap.xml', async (req: Request, res: Response) => {
       { loc: '/losses', changefreq: 'hourly', priority: '0.8' },
       { loc: '/quantum', changefreq: 'hourly', priority: '0.8' },
       { loc: '/utxos', changefreq: 'hourly', priority: '0.8' },
+      { loc: '/research', changefreq: 'weekly', priority: '0.8' },
+      { loc: '/research/lost-coins', changefreq: 'weekly', priority: '0.7' },
+      { loc: '/research/quantum', changefreq: 'weekly', priority: '0.7' },
       { loc: '/proposals', changefreq: 'monthly', priority: '0.6' },
       { loc: '/about', changefreq: 'monthly', priority: '0.5' },
       ...readProposals().map(p => ({
@@ -860,6 +1128,7 @@ counted as lost.
 - [Effective supply explorer](${base}/): the headline numbers with interactive loss/quantum sliders.
 - [Loss history](${base}/losses): every provably or probably lost output, newest first.
 - [Quantum exposure](${base}/quantum): coin sitting behind exposed public keys.
+- [Research](${base}/research): the findings in prose, with [lost coins](${base}/research/lost-coins) and [quantum exposure](${base}/research/quantum) in depth, including which address types keep a key hidden.
 - [The UTXO set](${base}/utxos): the unspent set by age and value.
 
 ## Structured data (JSON API)
@@ -924,6 +1193,12 @@ router.post('/search', async (req: Request, res: Response) => {
       return res.redirect(`/transaction/${query}`);
     }
 
+    // Any valid address, seen or not: the address page answers for unfunded
+    // ones too (checking an address before sending to it is the point), and
+    // explains a bad checksum for something address-shaped.
+    if (isValidAddress(query) || /^(1|3|bc1)[a-zA-Z0-9]{24,88}$/.test(query)) {
+      return res.redirect(`/address/${encodeURIComponent(query)}`);
+    }
     const { rows } = await pool.query('SELECT address FROM address_info WHERE address = $1', [query]);
     if (rows.length) return res.redirect(`/address/${query}`);
 

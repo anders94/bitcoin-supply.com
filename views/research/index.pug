@@ -1,0 +1,86 @@
+extends ../layout
+include ../mixins
+include charts
+
+block content
+  article.research
+    .page-head
+      span.label RESEARCH
+      span.page-title 21 million is the ceiling, not the count.
+
+    p.lede
+      | Bitcoin’s supply is quoted as if every coin ever issued could still move. This site measures how true that is: output by output, from a fully indexed node, with every figure traced to a public rule. Two questions organise the work. Which coins can #[em never] move? And which coins #[em can] move, but behind a public key that a large enough quantum computer could break?
+
+    .r-stats
+      .r-stat
+        span.k In existence
+        span.v #{btcShort(supply)}
+        span.s #{pct(capPct)}% of the 21M cap
+      .r-stat
+        span.k Provably lost
+        span.v.v--red #{btcShort(provable)}
+        span.s #{pct(sharePct(provable))}% of supply
+      .r-stat
+        span.k Probably lost
+        span.v.v--red #{btcShort(probable)}
+        span.s includes provable
+      .r-stat
+        span.k Untouched 10+ yrs
+        span.v #{btcShort(dormant10)}
+        span.s #{pct(sharePct(dormant10))}% of supply
+      .r-stat
+        span.k Quantum-exposed
+        span.v.v--purple #{btcShort(exposed)}
+        span.s #{pct(sharePct(exposed))}% of supply
+    span.r-dated BTC · live from the hourly snapshot at block #{num(asOfBlock)}
+
+    section.r-sec
+      h2 The whole cap, in one bar
+      figure.r-fig
+        span.fig-title The 21M cap: share of the cap in each part
+        .frame(role='img', aria-label='The 21 million cap split into lost, quantum-exposed, neither, and not yet mined')
+          each f in frame
+            span(class=f.key, style=`flex:${Math.max(f.pct, 0.0001)} 0 0`, title=`${f.label}: ${btc8(f.sats)} BTC (${pct(f.pct)}%)`)
+        .legend
+          each f in frame
+            span
+              i(class=f.key === 'lost' ? 'sw-ooc' : f.key === 'exposed' ? 'sw-purple' : f.key === 'rest' ? 'sw-eff' : 'sw-stripe')
+              | #{f.label} · #{btcShort(f.sats)} (#{pct(f.pct)}%)
+        figcaption The red sliver at the left edge is every coin we can show is lost. It is drawn at its minimum visible width: at #{pct(frame[0].pct)}% of the cap it would otherwise not render at all. The purple is spendable coin whose public key is already public.
+      .prose
+        p That picture is the first finding. Popular estimates put three to four million bitcoin “lost”. What can actually be #[em demonstrated] from the chain is a few thousand. The millions in those estimates are coins that have not moved for a long time, which is a different claim, and one this site keeps separate on purpose.
+
+    section.r-sec
+      h2 Two lenses, kept apart
+      .prose
+        p
+          strong Lost
+          |  means the coin cannot move, or almost certainly never will. #[em Provably lost] coins fail on mathematics or consensus: an output script no signature can satisfy, a key that is not a point on the curve, a coin the software never added to the spendable set. #[em Probably lost] coins could in principle move but no one plausibly holds the key, such as burn addresses. #[a(href='/research/lost-coins') The lost-coins research] covers both.
+        p
+          strong Quantum-exposed
+          |  means the coin #[em can] move, but its public key is already visible on-chain, so an attacker with a cryptographically relevant quantum computer could derive the private key and move it first. Some output types publish the key when they are created; the rest publish it on their first spend, and from then on everything at that address is exposed. #[a(href='/research/quantum') The quantum research] covers where that coin is and how to check your own.
+        p Each output gets exactly one verdict, in a fixed order: provably lost, then probably lost, then key visible in the script. So a lost coin is never also counted as exposed, and the two totals can be added without double counting. #[strong Dormancy] is a third view, not a verdict: it is how long an output has sat still, and it overlaps everything. The million-odd early coins attributed to Satoshi are dormant, exposed, and deliberately #[em not] called lost.
+
+    section.r-sec
+      h2 How we try to be right
+      .prose
+        ul
+          li #[strong Every figure traces to a rule.] Each classification is a public #[a(href='/proposals') proposal] with its rationale, scale and edge cases. Nothing on the site is an estimate unless it says so.
+          li #[strong We count outputs, not addresses.] An address can hold coins of different kinds and ages; counting per output keeps an exposed coin and an unexposed one at the same address apart, and stops a dust payment from making a dormant fortune look active.
+          li #[strong We check ourselves against independent work.] The quantum total is compared every hour with Project Eleven’s, computed by a different method on different infrastructure. After the corrections below, the totals agree to within about a hundredth of a percent.
+          li #[strong We publish our corrections.] Our first quantum figure was half the real one. Two hundred and thirty-eight million zero-value outputs once inflated every loss count. A coin we had called provably lost turned out to be spendable. Each is written up in the research, with what changed and why.
+          li #[strong We say what we can’t see.] Keys disclosed off-chain, coins lost to forgotten passwords, exchange collapses: none of it is visible in the chain, and none of it is guessed at here.
+
+    .r-cards
+      a.r-card(href='/research/lost-coins')
+        span.label LOST COINS
+        span.v #{btcShort(provable)} provable · #{btcShort(dormant10)} dormant 10y+
+        span.d Why the certain part is a thousandth of the debatable part, the strange ways coins die, and why age is the hardest number to read.
+        span.go READ →
+      a.r-card(href='/research/quantum')
+        span.label QUANTUM EXPOSURE
+        span.v #{btcShort(exposed)} BTC behind public keys
+        span.d Where the exposed coin is, how we found the half we first missed, how to check your own addresses, and which address types keep a key hidden.
+        span.go READ →
+
+    .note--italic The rules themselves: #[a(href='/proposals', style='color:var(--secondary)') proposals]. The figures as data: #[a(href='/api/v1/stats', style='color:var(--secondary)') /api/v1/stats], #[a(href='/api/v1/quantum', style='color:var(--secondary)') /api/v1/quantum]. Source: #[a(href='https://github.com/anders94/bitcoin-supply.com', style='color:var(--secondary)') GitHub].

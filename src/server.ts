@@ -14,10 +14,11 @@ import { pool } from './db/index.js';
 // Without a cap, a slow query outlives its client and keeps holding one of the
 // pool's connections, so a few of them stall every other route. Web only: the
 // ETL shares the pool module and its snapshot / backfill queries run for minutes.
+// Set on the pool's client options (sent at connection startup) rather than
+// with a SET on 'connect', which races the first query on that connection.
+// No connection exists yet: imports above open none.
 const STATEMENT_TIMEOUT_MS = 30_000;
-pool.on('connect', (client) => {
-  client.query(`SET statement_timeout = ${STATEMENT_TIMEOUT_MS}`).catch(() => {});
-});
+(pool as unknown as { options: Record<string, unknown> }).options.statement_timeout = STATEMENT_TIMEOUT_MS;
 
 const app = express();
 

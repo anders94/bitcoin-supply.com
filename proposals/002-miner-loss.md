@@ -32,11 +32,15 @@ percentage of the overall reward available to a miner. While net supply loss due
 error is always possible, it will probably become more likely as more halvings happen.
 
 ## Implementation
-Blocks whose `output_sum` minus `input_sum` is less than `allowed_supply` cause provably
-lost supply.
+A block's `allowed_supply` is its subsidy plus the fees its transactions surrender. When the
+coinbase claims less than that, the difference is provably lost supply.
 ```
-block.supply_loss = block.allowed_supply < block.output_sum - block.input_sum;
+block.allowed_supply = subsidy(block.height) + block.fees;
+block.supply_loss    = max(0, block.allowed_supply - block.coinbase_value);
 ```
+The loss is recorded per block (`blocks.miner_loss_sats`), not per UTXO: the coin was never
+created, so no output carries it. The largest single loss is block 501,726 (December 2017),
+whose miner claimed nothing and left the whole 12.5 BTC subsidy unissued.
 
 ## Example
 Block `124724` looses 0.01000001 BTC 

@@ -1,0 +1,50 @@
+//- Chart mixins for the research pages. Geometry (bar widths, log ticks,
+//- column heights) is computed in routes/pages.ts; these only lay it out.
+//- Every mark carries a title attribute for the hover readout, and every
+//- value is printed beside its bar, so nothing depends on colour alone.
+
+//- Horizontal bars. rows: [{ label, w (0-100), tone, value (html), title }];
+//- ticks: [{ pos, label }] for a labelled axis (log charts), or empty.
+mixin hbars(rows, ticks)
+  .hb
+    each r in rows
+      span.l= r.label
+      .t(title=r.title)
+        span.f(class=r.tone && r.tone !== 'ink' ? 'f--' + r.tone : null, style=`width:${Math.max(r.w, 0).toFixed(2)}%`)
+      span.v!= r.value
+    if ticks && ticks.length
+      span.hb-pad
+      .hb-axis(aria-hidden='true')
+        each t in ticks
+          span(style=`left:${t.pos.toFixed(2)}%`)= t.label
+      span.hb-pad
+
+//- Two bars per row on one shared axis (both are shares of their own total).
+//- rows: [{ label, wa, wb, va, vb, title }]
+mixin pairbars(rows, nameA, nameB)
+  .legend
+    span #[i.sw-purple] #{nameA}
+    span #[i.sw-amber] #{nameB}
+  .hb
+    each r in rows
+      span.l= r.label
+      .t.t--pair(title=r.title)
+        span.f.f--purple(style=`width:${r.wa.toFixed(2)}%`)
+        span.f.f--amber(style=`width:${r.wb.toFixed(2)}%`)
+      span.v!= `${r.va} <small>·</small> ${r.vb}`
+
+//- Stacked columns. cols: [{ x, title, segs: [{ h (0-100), tone }] }];
+//- ticks: [{ pos, label }] gridlines from the baseline up.
+mixin columns(cols, ticks)
+  .cols
+    each t in ticks
+      .gl(style=`bottom:${t.pos.toFixed(2)}%`)
+        span= t.label
+    each c in cols
+      .c(title=c.title)
+        each s in c.segs
+          if s.h > 0
+            .seg(class=s.tone ? 'seg--' + s.tone : null, style=`height:${s.h.toFixed(2)}%`)
+  .cols-x(aria-hidden='true')
+    each c in cols
+      span= c.x

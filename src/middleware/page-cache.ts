@@ -20,6 +20,9 @@ const TTL: Record<string, number> = {
   '/quantum': 300,      // hourly snapshot data
   '/utxos': 300,        // hourly snapshot data
   '/about': 3600,       // changes only on deploy
+  '/research': 300,     // prose + hourly snapshot figures
+  '/research/lost-coins': 300,
+  '/research/quantum': 300,
   '/proposals': 3600,   // changes only on deploy
   '/sitemap.xml': 3600,
 };

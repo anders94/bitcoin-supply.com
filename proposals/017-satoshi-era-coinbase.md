@@ -26,7 +26,7 @@ The Patoshi pattern was identified by Sergio Demian Lerner in 2013. Key observat
 ## Status
 
 This proposal does **not** create a separate loss rule in the ETL. Instead:
-1. Satoshi-era blocks are already covered by the **dormancy slider** (≥14 years dormant)
+1. Satoshi-era blocks are already covered by the **dormancy slider** (they are over 15 years old, so the 15-year breakpoint includes them)
 2. P2PK outputs in these blocks are tagged with Proposal **015** (quantum vulnerable)
 
 A future version could add a dedicated `017` tag with a configurable threshold for
@@ -41,4 +41,4 @@ This represents roughly 5.5% of the theoretical maximum supply.
 
 The Patoshi attribution is probabilistic, not deterministic. Including these coins as
 "probably lost" requires accepting that the pattern analysis is correct. The dormancy
-slider subsumes this category at the 14-year mark.
+slider subsumes this category at the 15-year mark.
