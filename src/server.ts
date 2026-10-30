@@ -5,6 +5,7 @@ import path from 'path';
 import { connectRedis } from './services/redis.js';
 import { startBlockPoller } from './services/sse.js';
 import { localCache } from './services/local-cache.js';
+import { clearPageCache } from './middleware/page-cache.js';
 import apiRoutes from './routes/api.js';
 import pageRoutes from './routes/pages.js';
 import { config } from './config.js';
@@ -134,6 +135,9 @@ app.use('/', pageRoutes);
 async function start() {
   localCache.init();
   await connectRedis();
+  await clearPageCache()
+    .then((n) => console.log(`Cleared ${n} cached pages from the previous build`))
+    .catch((err) => console.error('Page cache clear failed:', err));
   await startBlockPoller();
   const server = app.listen(config.server.port, config.server.host, () => {
     console.log(`Server listening on ${config.server.host}:${config.server.port}`);

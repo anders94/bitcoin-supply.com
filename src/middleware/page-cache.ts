@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { cacheGet, cacheSet } from '../services/redis.js';
+import { cacheGet, cacheSet, redisClient } from '../services/redis.js';
 
 // Redis-backed HTML cache for the canonical pages.
 //
@@ -46,6 +46,17 @@ function ttlFor(originalUrl: string): number | null {
 interface Envelope {
   ct: string;
   body: string;
+}
+
+// Called once at startup. A page cached by the previous build carries its old
+// markup and its old ?v= stylesheet URL, and would otherwise be served for up
+// to an hour after a deploy. Best-effort: a failure only leaves those pages
+// to expire on their own.
+export async function clearPageCache(): Promise<number> {
+  const keys: string[] = [];
+  for await (const key of redisClient.scanIterator({ MATCH: 'page:*', COUNT: 100 })) keys.push(key);
+  if (keys.length) await redisClient.del(keys);
+  return keys.length;
 }
 
 export function pageCache() {
