@@ -8,33 +8,36 @@ block content
       span.label RESEARCH
       span.page-title 21 million is the ceiling, not the count.
 
-    p.lede
-      | Bitcoin’s supply is quoted as if every coin ever issued could still move. This site measures how true that is: output by output, from a fully indexed node, with every figure traced to a public rule. Two questions organise the work. Which coins can #[em never] move? And which coins #[em can] move, but behind a public key that a large enough quantum computer could break?
+    .r-intro
+      .r-lead
+        p.lede
+          | Bitcoin’s supply is quoted as if every coin ever issued could still move. This site measures how true that is: output by output, from a fully indexed node, with every figure traced to a public rule. Two questions organise the work. Which coins can #[em never] move? And which coins #[em can] move, but behind a public key that a large enough quantum computer could break?
 
-    .r-stats
-      .r-stat
-        span.k In existence
-        span.v #{btcShort(supply)}
-        span.s #{pct(capPct)}% of the 21M cap
-      .r-stat
-        span.k Provably lost
-        span.v.v--red #{btcShort(provable)}
-        span.s #{pct(sharePct(provable))}% of supply
-      .r-stat
-        span.k Probably lost
-        span.v.v--red #{btcShort(probable)}
-        span.s includes provable
-      .r-stat
-        span.k Untouched 10+ yrs
-        span.v #{btcShort(dormant10)}
-        span.s #{pct(sharePct(dormant10))}% of supply
-      .r-stat
-        span.k Quantum-exposed
-        span.v.v--purple #{btcShort(exposed)}
-        span.s #{pct(sharePct(exposed))}% of supply
-    span.r-dated BTC · live from the hourly snapshot at block #{num(asOfBlock)}
+        .r-stats
+          .r-stat
+            span.k In existence
+            span.v #{btcShort(supply)}
+            span.s #{pct(capPct)}% of the 21M cap
+          .r-stat
+            span.k Provably lost
+            span.v.v--red #{btcShort(provable)}
+            span.s #{pct(sharePct(provable))}% of supply
+          .r-stat
+            span.k Probably lost
+            span.v.v--red #{btcShort(probable)}
+            span.s includes provable
+          .r-stat
+            span.k Untouched 10+ yrs
+            span.v #{btcShort(dormant10)}
+            span.s #{pct(sharePct(dormant10))}% of supply
+          .r-stat
+            span.k Quantum-exposed
+            span.v.v--purple #{btcShort(exposed)}
+            span.s #{pct(sharePct(exposed))}% of supply
+        span.r-dated BTC · live from the hourly snapshot at block #{num(asOfBlock)}
 
     section.r-sec
+      span.label 01 · THE CAP
       h2 The whole cap, in one bar
       figure.r-fig
         span.fig-title The 21M cap: share of the cap in each part
@@ -51,6 +54,7 @@ block content
         p That picture is the first finding. Popular estimates put three to four million bitcoin “lost”. What can actually be #[em demonstrated] from the chain is a few thousand. The millions in those estimates are coins that have not moved for a long time, which is a different claim, and one this site keeps separate on purpose.
 
     section.r-sec
+      span.label 02 · TWO LENSES
       h2 Two lenses, kept apart
       .prose
         p
@@ -62,6 +66,7 @@ block content
         p Each output gets exactly one verdict, in a fixed order: provably lost, then probably lost, then key visible in the script. So a lost coin is never also counted as exposed, and the two totals can be added without double counting. #[strong Dormancy] is a third view, not a verdict: it is how long an output has sat still, and it overlaps everything. The million-odd early coins attributed to Satoshi are dormant, exposed, and deliberately #[em not] called lost.
 
     section.r-sec
+      span.label 03 · METHOD
       h2 How we try to be right
       .prose
         ul

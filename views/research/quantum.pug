@@ -9,33 +9,36 @@ block content
       span.label RESEARCH · QUANTUM EXPOSURE
       span.page-title Most exposed bitcoin isn’t Satoshi’s. It’s address reuse.
 
-    p.lede
-      | #[strong #{btcShort(exposed)} BTC], #{pct(sharePct(exposed))}% of all coins in existence, sits behind a public key that is already on the blockchain. A quantum computer able to run Shor’s algorithm at scale could derive those private keys and spend the coins. The early pay-to-pubkey outputs everyone talks about are only #{pct(sharePct(BigInt(q.p2pk.sats), exposed))}% of that. Most of the rest is ordinary coin at addresses that have spent before, or that share a key with one that has.
+    .r-intro
+      .r-lead
+        p.lede
+          | #[strong #{btcShort(exposed)} BTC], #{pct(sharePct(exposed))}% of all coins in existence, sits behind a public key that is already on the blockchain. A quantum computer able to run Shor’s algorithm at scale could derive those private keys and spend the coins. The early pay-to-pubkey outputs everyone talks about are only #{pct(sharePct(BigInt(q.p2pk.sats), exposed))}% of that. Most of the rest is ordinary coin at addresses that have spent before, or that share a key with one that has.
 
-    form.r-check(action='/search', method='POST')
-      input(type='search', name='query', placeholder='Paste a bitcoin address', autocomplete='off', spellcheck='false', aria-label='Bitcoin address to check')
-      button(type='submit') CHECK
-    .note--italic Checks every way a key can already be public: a spend from the address, the same key at its other address types and encodings, and keys inside P2PK, multisig and revealed scripts, from block 0 to block #{num(asOfBlock)}. Works for addresses that have never received coins.
+        form.r-check(action='/search', method='POST')
+          input(type='search', name='query', placeholder='Paste a bitcoin address', autocomplete='off', spellcheck='false', aria-label='Bitcoin address to check')
+          button(type='submit') CHECK
+        .note--italic Checks every way a key can already be public: a spend from the address, the same key at its other address types and encodings, and keys inside P2PK, multisig and revealed scripts, from block 0 to block #{num(asOfBlock)}. Works for addresses that have never received coins.
 
-    .callout
-      strong If you hold bitcoin
-      ol
-        li Never reuse an address. Once an address has spent, its key is public; treat everything still there, or sent there later, as exposed.
-        li Keep long-term savings in an address that has #[em never] spent: P2WPKH (#[code bc1q…]) is the simplest choice.
-        li Don’t use one key under several address types. A fresh-looking address can share a key with one that already spent.
-        li Don’t share extended public keys (xpubs) or sign messages with savings keys; both reveal keys off-chain, where no one can check.
-        li Taproot (#[code bc1p…]) puts the key in the address itself. It is exposed from the moment it receives coins.
-      span(style='font-size:11px;color:var(--secondary)') The reasoning, and what no address type can protect against, is in #[a(href='#advice') section 06].
+        .callout
+          strong If you hold bitcoin
+          ol
+            li Never reuse an address. Once an address has spent, its key is public; treat everything still there, or sent there later, as exposed.
+            li Keep long-term savings in an address that has #[em never] spent: P2WPKH (#[code bc1q…]) is the simplest choice.
+            li Don’t use one key under several address types. A fresh-looking address can share a key with one that already spent.
+            li Don’t share extended public keys (xpubs) or sign messages with savings keys; both reveal keys off-chain, where no one can check.
+            li Taproot (#[code bc1p…]) puts the key in the address itself. It is exposed from the moment it receives coins.
+          span.more The reasoning, and what no address type can protect against, is in #[a(href='#advice') section 06].
 
-    nav.r-toc(aria-label='On this page')
-      a(href='#how') #[span.n 01] How a key becomes public
-      a(href='#where') #[span.n 02] Where the exposed coin is
-      a(href='#concentration') #[span.n 03] A few keys hold most of it
-      a(href='#when') #[span.n 04] When the keys went public
-      a(href='#findings') #[span.n 05] Findings: how we found the half we missed
-      a(href='#advice') #[span.n 06] Which addresses keep a key hidden
-      a(href='#crosscheck') #[span.n 07] Cross-check: Project Eleven
-      a(href='#limits') #[span.n 08] Method and limits
+      nav.r-toc(aria-label='On this page')
+        span.label ON THIS PAGE
+        a(href='#how') #[span.n 01] How a key becomes public
+        a(href='#where') #[span.n 02] Where the exposed coin is
+        a(href='#concentration') #[span.n 03] A few keys hold most of it
+        a(href='#when') #[span.n 04] When the keys went public
+        a(href='#findings') #[span.n 05] Findings: how we found the half we missed
+        a(href='#advice') #[span.n 06] Which addresses keep a key hidden
+        a(href='#crosscheck') #[span.n 07] Cross-check: Project Eleven
+        a(href='#limits') #[span.n 08] Method and limits
 
     section.r-sec#how
       span.label 01 · MECHANISM

@@ -9,15 +9,18 @@ block content
       span.label RESEARCH · LOST COINS
       span.page-title The certain part is a thousandth of the debatable part.
 
-    p.lede
-      | Only #[strong #{btcShort(provable)} BTC] can be shown, from the chain alone, to be gone for good: #{pct(sharePct(provable))}% of the coins in existence. Another #[strong #{btcShort(probableOnly)} BTC] sits where no one plausibly holds a key. Meanwhile #[strong #{btcShort(dormant10)} BTC] has not moved in ten years or more. The popular “millions of lost coins” lives entirely in that last number, and it is a measure of patience as much as of loss.
+    .r-intro
+      .r-lead
+        p.lede
+          | Only #[strong #{btcShort(provable)} BTC] can be shown, from the chain alone, to be gone for good: #{pct(sharePct(provable))}% of the coins in existence. Another #[strong #{btcShort(probableOnly)} BTC] sits where no one plausibly holds a key. Meanwhile #[strong #{btcShort(dormant10)} BTC] has not moved in ten years or more. The popular “millions of lost coins” lives entirely in that last number, and it is a measure of patience as much as of loss.
 
-    nav.r-toc(aria-label='On this page')
-      a(href='#scale') #[span.n 01] Certain, probable, dormant: the scale
-      a(href='#sources') #[span.n 02] Where certain losses come from
-      a(href='#findings') #[span.n 03] Findings that run against intuition
-      a(href='#dormancy') #[span.n 04] Dormancy: the big, debatable number
-      a(href='#limits') #[span.n 05] What we don’t count, and why
+      nav.r-toc(aria-label='On this page')
+        span.label ON THIS PAGE
+        a(href='#scale') #[span.n 01] Certain, probable, dormant: the scale
+        a(href='#sources') #[span.n 02] Where certain losses come from
+        a(href='#findings') #[span.n 03] Findings that run against intuition
+        a(href='#dormancy') #[span.n 04] Dormancy: the big, debatable number
+        a(href='#limits') #[span.n 05] What we don’t count, and why
 
     section.r-sec#scale
       span.label 01 · THE SCALE
