@@ -1,7 +1,7 @@
 import { pool } from '../db/index.js';
 import { upsertSnapshot } from '../db/snapshots.js';
 import { upsertComputedStat } from '../db/computed-stats.js';
-import { RULE_TITLES } from '../helpers/breakdown.js';
+import { RULE_TITLES, BREAKDOWN_GROUPS } from '../helpers/breakdown.js';
 
 const DORMANCY_YEARS = [1, 3, 5, 7, 10, 15, 20];
 const YEAR_SECONDS = 31557600; // 365.25 days
@@ -258,7 +258,27 @@ async function supplyScan(tipBlock: number, tipTs: Date): Promise<void> {
 }
 
 // Per-rule totals over loss UTXOs plus block-level miner loss (rule 002).
-async function ruleBreakdown(tipBlock: number, out: { rules: any[]; miner_loss: any }): Promise<void> {
+// Homepage breakdown rows. An output can match several rules (the Mt. Gox
+// outputs are 003 and 009), so summing per-rule totals double counts; each
+// output goes to the first group in BREAKDOWN_GROUPS order instead, within its
+// own bucket. Provable groups therefore sum to provably_lost exactly, and
+// probable groups to probably_lost minus provably_lost.
+function groupCase(): { sql: string; labels: string[] } {
+  const labels: string[] = [];
+  const whens: string[] = [];
+  const add = (bucket: number, groups: { rules: string[]; label: string }[]) => {
+    for (const g of groups) {
+      if (!g.rules.every(r => /^\d{3}$/.test(r))) throw new Error(`bad rule in group ${g.label}`);
+      whens.push(`WHEN loss_bucket = ${bucket} AND loss_rules && '{${g.rules.join(',')}}' THEN ${labels.length}`);
+      labels.push(g.label);
+    }
+  };
+  add(1, BREAKDOWN_GROUPS.provable);
+  add(2, BREAKDOWN_GROUPS.probable);
+  return { sql: `CASE ${whens.join(' ')} END`, labels };
+}
+
+async function ruleBreakdown(tipBlock: number, out: { rules: any[]; miner_loss: any; groups?: any[] }): Promise<void> {
   const { rows } = await pool.query(`
     SELECT rule, SUM(value_sats)::text AS total_sats, COUNT(*)::text AS utxo_count,
            MIN(EXTRACT(YEAR FROM block_timestamp))::int AS first_year,
@@ -274,8 +294,19 @@ async function ruleBreakdown(tipBlock: number, out: { rules: any[]; miner_loss: 
     FROM blocks
   `);
 
+  const gc = groupCase();
+  const { rows: groupRows } = await pool.query(`
+    SELECT g, SUM(value_sats)::text AS total_sats, COUNT(*)::text AS utxo_count
+    FROM (SELECT ${gc.sql} AS g, value_sats FROM utxos WHERE loss_bucket IN (1, 2)) t
+    WHERE g IS NOT NULL GROUP BY g
+  `);
+
   out.rules = rows;
   out.miner_loss = miner[0];
+  out.groups = gc.labels.map((label, i) => {
+    const r = groupRows.find(x => Number(x.g) === i);
+    return { label, total_sats: r?.total_sats ?? '0', utxo_count: r?.utxo_count ?? '0' };
+  });
   await upsertComputedStat('rule_breakdown', out, tipBlock);
 }
 
@@ -354,17 +385,19 @@ async function topLosses(tipBlock: number, breakdown: { rules: any[] }): Promise
     }
   }
 
-  // Largest individual loss UTXOs (skip rules covered by grouped entries).
+  // Largest individual loss UTXOs, leaving out any output that matches a rule
+  // listed as a group above or below: an output tagged with a grouped rule and
+  // another (Mt. Gox's were once also 009) would otherwise appear twice.
+  const grouped = ['000', '001', '003', '012'];
   const { rows: utxoRows } = await pool.query(`
     SELECT tx_hash, value_sats::text, block_number, loss_rules,
            EXTRACT(YEAR FROM block_timestamp)::int AS year
-    FROM utxos WHERE loss_bucket IN (1, 2)
+    FROM utxos WHERE loss_bucket IN (1, 2) AND NOT loss_rules && $1::text[]
     -- Qualified: a bare name would sort by the ::text output column, as text.
-    ORDER BY utxos.value_sats DESC LIMIT 25
-  `);
-  const grouped = new Set(['000', '001', '003', '012']);
+    ORDER BY utxos.value_sats DESC LIMIT 10
+  `, [grouped]);
   for (const row of utxoRows) {
-    const rule = (row.loss_rules as string[]).find(r => !grouped.has(r));
+    const rule = (row.loss_rules as string[])[0];
     if (!rule) continue;
     entries.push({
       label: RULE_TITLES[rule] ?? `Rule ${rule}`, rule,

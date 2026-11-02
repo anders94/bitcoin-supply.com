@@ -23,12 +23,12 @@ const TTL: Record<string, number> = {
   '/research': 300,     // prose + hourly snapshot figures
   '/research/lost-coins': 300,
   '/research/quantum': 300,
-  '/proposals': 3600,   // changes only on deploy
+  '/proposals': 300,    // live figures from the hourly snapshot
   '/sitemap.xml': 3600,
 };
 
 const PROPOSAL_RE = /^\/proposals\/\d{3}$/;
-const PROPOSAL_TTL = 3600;
+const PROPOSAL_TTL = 300; // live figure row from the hourly snapshot
 
 // Cached HTML embeds the header tip, so it can lag by up to the TTL. JS clients
 // correct it from SSE within seconds (public/javascripts/header.ts); for no-JS

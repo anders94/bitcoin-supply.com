@@ -212,7 +212,8 @@ export function classifyWrongHashPush(ctx: ClassifierInput): '009' | null {
   // P2PKH: 76 a9 [push] [data] 88 ac
   if (hex.startsWith('76a9') && hex.endsWith('88ac') && hex.length >= 10) {
     const pushByte = parseInt(hex.slice(4, 6), 16);
-    if (pushByte <= 0x4b &&                          // direct push only
+    if (pushByte >= 1 &&                             // 0 is 76a90088ac: proposal 003's
+        pushByte <= 0x4b &&                          // direct push only
         hex.length === 6 + pushByte * 2 + 4 &&      // consistent total length
         pushByte !== 20) {                           // not standard 20-byte hash
       return '009';

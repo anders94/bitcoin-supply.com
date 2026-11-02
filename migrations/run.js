@@ -16,6 +16,7 @@ const MIGRATIONS = [
   '007-nums-keys.sql',
   '008-exposure-kind.sql',
   '009-revealed-key-hashes.sql',
+  '010-mtgox-not-009.sql',
 ];
 
 async function run() {

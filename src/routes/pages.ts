@@ -136,17 +136,21 @@ router.get('/', async (req: Request, res: Response) => {
     const ruleTotal = (rules: string[], field: 'total_sats' | 'utxo_count') =>
       rules.reduce((sum, r) => sum + BigInt(breakdownRules.find(b => b.rule === r)?.[field] ?? 0), 0n);
 
+    // Per-output group totals from the snapshot; summing per-rule totals counts
+    // an output once per rule it matches, so that is
+    // only the fallback until the first snapshot that writes groups.
+    const groupStats: any[] | undefined = stats['rule_breakdown']?.data?.groups;
+    const groupRow = (g: { rules: string[]; label: string }) => {
+      const hit = groupStats?.find(x => x.label === g.label);
+      return {
+        rules: g.rules, label: g.label,
+        sats: hit ? hit.total_sats : ruleTotal(g.rules, 'total_sats').toString(),
+        count: hit ? hit.utxo_count : ruleTotal(g.rules, 'utxo_count').toString(),
+      };
+    };
     const breakdown = {
-      provable: BREAKDOWN_GROUPS.provable.map(g => ({
-        rules: g.rules, label: g.label,
-        sats: ruleTotal(g.rules, 'total_sats').toString(),
-        count: ruleTotal(g.rules, 'utxo_count').toString(),
-      })),
-      probable: BREAKDOWN_GROUPS.probable.map(g => ({
-        rules: g.rules, label: g.label,
-        sats: ruleTotal(g.rules, 'total_sats').toString(),
-        count: ruleTotal(g.rules, 'utxo_count').toString(),
-      })),
+      provable: BREAKDOWN_GROUPS.provable.map(groupRow),
+      probable: BREAKDOWN_GROUPS.probable.map(groupRow),
     };
 
     const curve: any[] = stats['quantum_curve']?.data?.breakpoints ?? [];
@@ -738,8 +742,7 @@ async function researchData() {
   ].map(f => ({ ...f, pct: share(f.sats, CAP_SATS) }));
 
   // Every rule that tags lost outputs. 015 is the P2PK quantum rule riding on
-  // lost P2PK outputs (genesis, the duplicate coinbases) and is left out; 009
-  // matches the same 23 outputs as 003. Totals count each output once.
+  // lost P2PK outputs (genesis, the duplicate coinbases) and is left out.
   const rules = (breakdown?.rules ?? [])
     .filter((r: any) => r.rule !== '015')
     .map((r: any) => ({
@@ -749,12 +752,11 @@ async function researchData() {
       sats: BigInt(r.total_sats),
       count: BigInt(r.utxo_count),
       years: r.first_year === r.last_year ? `${r.first_year}` : `${r.first_year}–${r.last_year}`,
-      overlap: r.rule === '009' ? '003' : null,
     }))
     .sort((a: any, b: any) => (b.sats > a.sats ? 1 : b.sats < a.sats ? -1 : 0));
   // Rules holding under 1 BTC are folded into one row: five of them together
   // are a fraction of a coin, and their percentages would read as noise.
-  const provableAll = rules.filter((r: any) => r.category === 'provable' && !r.overlap);
+  const provableAll = rules.filter((r: any) => r.category === 'provable');
   const minor = provableAll.filter((r: any) => r.sats < 100_000_000n);
   const provableRules = [
     ...provableAll.filter((r: any) => r.sats >= 100_000_000n),
@@ -938,15 +940,43 @@ function readProposals(): ProposalMeta[] {
   return proposalsMemo;
 }
 
+// Live figure for a proposal from the hourly snapshot, where one exists that
+// measures exactly that rule. Hand-written Scale Estimates drift (004 still
+// said 12.10 BTC when the chain held 51); the rest keep their written figure.
+const LIVE_QUANTUM: Record<string, string> = { '015': 'quantum_p2pk', '019': 'quantum_p2tr', '020': 'quantum_p2ms' };
+
+async function liveScales(): Promise<{ block: string | null; byId: Map<string, { sats: string; count: string; unit: string }> }> {
+  const [snapshots, stats] = await Promise.all([getAllSnapshots(), getComputedStats(['rule_breakdown'])]);
+  const byId = new Map<string, { sats: string; count: string; unit: string }>();
+  const rb = stats['rule_breakdown'];
+  for (const r of rb?.data?.rules ?? []) {
+    if (ruleCategory(r.rule) === 'provable' || ruleCategory(r.rule) === 'probable') {
+      byId.set(r.rule, { sats: r.total_sats, count: r.utxo_count, unit: 'output' });
+    }
+  }
+  const miner = rb?.data?.miner_loss;
+  if (miner) byId.set('002', { sats: miner.total_sats, count: miner.block_count, unit: 'block' });
+  for (const [id, key] of Object.entries(LIVE_QUANTUM)) {
+    const s = snapshots[key];
+    if (s) byId.set(id, { sats: s.total_sats.toString(), count: s.utxo_count.toString(), unit: 'output' });
+  }
+  const block = rb?.computed_at_block ?? snapshots['all_utxos']?.computed_at_block ?? null;
+  return { block: block === null ? null : String(block), byId };
+}
+
+const liveText = (l: { sats: string; count: string; unit: string }) =>
+  `${btc8(l.sats)} BTC · ${num(l.count)} ${l.unit}${l.count === '1' ? '' : 's'}`;
+
 // GET /proposals - Classification rule index
-router.get('/proposals', (req: Request, res: Response) => {
+router.get('/proposals', async (req: Request, res: Response) => {
   try {
+    const live = await liveScales();
     const proposals = readProposals().map(p => ({
       id: p.id,
       title: p.title,
       status: (p.fields['Status'] ?? 'Draft').toUpperCase(),
       category: (p.fields['Category'] ?? '').toUpperCase(),
-      scale: p.fields['Scale Estimate'] ?? '—',
+      scale: live.byId.has(p.id) ? `${btc8(live.byId.get(p.id)!.sats)} BTC` : (p.fields['Scale Estimate'] ?? '—'),
       chipClass: CATEGORY_CHIP_CLASS[(p.fields['Category'] ?? '').toUpperCase()] ?? 'chip--gray',
     }));
     res.locals.meta.description =
@@ -1009,7 +1039,16 @@ router.get('/proposals/:id', async (req: Request, res: Response) => {
         const found = Object.keys(meta.fields).find(k => k.toLowerCase() === key.toLowerCase());
         return found ? { label: key, value: meta.fields[found] } : null;
       })
-      .filter(Boolean);
+      .filter(Boolean) as { label: string; value: string }[];
+
+    const live = await liveScales();
+    const current = live.byId.get(meta.id);
+    if (current) {
+      metaRows.unshift({
+        label: 'Current',
+        value: liveText(current) + (live.block ? ` · block ${num(live.block)}` : ''),
+      });
+    }
 
     // First body paragraph, flattened to plain text, as the social summary.
     const firstPara = body

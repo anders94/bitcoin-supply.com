@@ -9,7 +9,7 @@ issuance and fees represents *Provably Lost* coin.
 | Created             | 2020-12-18        |
 | Category            | Provably Lost     |
 | First Seen in Block | 124,724           |
-| Scale Estimate      | xxxxxxxxxxx BTC   |
+| Scale Estimate      | ~29 BTC (1,124 blocks at block 974,263) |
 
 ## Abstract
 All blocks below height 6,930,000 include a reward of new coin issuance. If miners fail to
@@ -43,7 +43,11 @@ created, so no output carries it. The largest single loss is block 501,726 (Dece
 whose miner claimed nothing and left the whole 12.5 BTC subsidy unissued.
 
 ## Example
-Block `124724` looses 0.01000001 BTC 
+Block `124724` (May 2011), the first block with a miner loss, loses 0.01000001 BTC:
 ```
-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+subsidy(124724)        50.00000000 BTC
+fees                    0.01000000 BTC
+allowed_supply         50.01000000 BTC
+coinbase_value         49.99999999 BTC
+supply_loss             0.01000001 BTC
 ```

@@ -9,7 +9,7 @@ classified as *Provably Lost*.
 | Created             | 2020-12-18        |
 | Category            | Provably Lost     |
 | First Seen in Block | 247,633           |
-| Scale Estimate      | 12.10237381 BTC   |
+| Scale Estimate      | ~51 BTC (measured at block 974,263) |
 
 ## Abstract
 Use of transactions with `OP_RETURN` outputs is a common way to record arbitrary data in the bitcoin

@@ -38,7 +38,7 @@ block content
       figure.r-fig
         span.fig-title Provably lost BTC by rule
         +hbars(provableBars.map(r => ({ label: r.minor ? `${r.title} (${r.rule})` : `${r.rule} · ${r.title}`, w: r.w, tone: 'red', value: r.minor ? `${btc8(r.sats)}` : `${btcShort(r.sats)} <small>${pct(r.pct)}%</small>`, title: `${r.title}: ${btc8(r.sats)} BTC in ${num(r.count)} outputs` })), [])
-        figcaption Linear scale. Rules holding under 1 BTC share a row; rule 009 matches the same 23 outputs as 003 and is not drawn twice.
+        figcaption Linear scale. Rules holding under 1 BTC share a row.
       .prose
         p In 2011 a Mt. Gox wallet change produced outputs whose script asks for a public key hashing to #[em nothing]: an empty push where a 20-byte hash belongs. No key hashes to the empty string, so no signature can ever satisfy it. Those #{btcShort(provableBars[0] ? provableBars[0].sats : 0)} BTC are #{pct(provableBars[0] ? provableBars[0].pct : 0)}% of everything provably lost. Take that single mistake away and the provable total is about two hundred coins.
         p Unclaimed miner rewards are separate: #[strong #{btcShort(minerLoss)} BTC] across #{num(minerBlocks)} blocks whose miners took less than they were owed. Most of those blocks are from 2012 and each gave up a little; the largest single loss is #[a(href='/block/501726') block 501,726] in December 2017, whose miner claimed nothing at all and left the full 12.5 BTC subsidy unissued. That coin was never created, so it is not in any output, and we report it beside the provable total rather than inside it.
@@ -58,8 +58,6 @@ block content
                 td #[a(href=`/proposals/${r.rule}`)= r.rule]
                 td.l
                   | #{r.title}
-                  if r.overlap
-                    span(style='color:var(--faded)')  · same outputs as #{r.overlap}
                 td= r.category === 'provable' ? 'provable' : 'probable'
                 td.num= btc8(r.sats)
                 td.num= num(r.count)
@@ -71,7 +69,7 @@ block content
               td.num= btc8(minerLoss)
               td.num #{num(minerBlocks)} blocks
               td 2011–
-      .note--italic Live at block #{num(asOfBlock)}. Rules that currently match nothing (008, 013) are omitted. An output can match more than one rule; the totals above count each output once.
+      .note--italic Live at block #{num(asOfBlock)}. Rules that currently match nothing are omitted. An output can match more than one rule; the totals count each output once.
 
     section.r-sec#findings
       span.label 03 · FINDINGS
