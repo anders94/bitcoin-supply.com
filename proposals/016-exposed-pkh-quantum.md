@@ -6,7 +6,7 @@
 | Status              | Draft             |
 | Created             | 2026-03-25        |
 | Category            | Quantum Vulnerable|
-| Scale Estimate      | TBD               |
+| Scale Estimate      | ~4.1M BTC (measured at block 974,275, includes the coins of 022 and of P2SH-P2WPKH spends) |
 
 ## Problem
 

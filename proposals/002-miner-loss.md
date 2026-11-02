@@ -25,7 +25,7 @@ Not claiming some or all available new coin issuance leads to less than the expe
 supply to be created. However, not claiming fees decreases the total supply in the system.
 It isn't always clear if a miner isn't accepting new coin issuance or declining fees
 because both values are added together. It is also not clear if a miner simply made a
-mistake or is voulentarily choosing no to accept supply available to them.
+mistake or is voluntarily choosing not to accept supply available to them.
 
 As new coin issuance halves every 210,000 blocks, fees likely become a larger and larger
 percentage of the overall reward available to a miner. While net supply loss due to miner

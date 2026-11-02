@@ -6,7 +6,7 @@
 | Status              | Draft             |
 | Created             | 2026-10-13        |
 | Category            | Quantum Vulnerable|
-| Scale Estimate      | ~1.9M BTC         |
+| Scale Estimate      | ~1.1M BTC (measured at block 974,275) |
 
 ## Problem
 
@@ -20,6 +20,12 @@ coins sent to it afterwards, can be swept by a quantum attacker who derives M of
 keys. This is Proposal 016's mechanism generalised from one key to a script's worth of keys,
 and it is where exchange cold storage lives: the largest balances on-chain are reused P2SH and
 P2WSH multisig addresses.
+
+## Scale
+About 1.1M BTC at block 974,275. Project Eleven's "script" figure (about 1.9M BTC) also counts
+P2SH-wrapped single-key SegWit (P2SH-P2WPKH). That spend reveals one key, not a script, so
+those coins (about 0.8M BTC) are counted under Proposal 016 here. The two figures cover the same
+coins split differently.
 
 ## Detection
 

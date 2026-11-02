@@ -943,12 +943,31 @@ function readProposals(): ProposalMeta[] {
 // Live figure for a proposal from the hourly snapshot, where one exists that
 // measures exactly that rule. Hand-written Scale Estimates drift (004 still
 // said 12.10 BTC when the chain held 51); the rest keep their written figure.
-const LIVE_QUANTUM: Record<string, string> = { '015': 'quantum_p2pk', '019': 'quantum_p2tr', '020': 'quantum_p2ms' };
+type LiveScale = { sats: string; count: string; unit: string; note?: string };
 
-async function liveScales(): Promise<{ block: string | null; byId: Map<string, { sats: string; count: string; unit: string }> }> {
+// Quantum rules whose snapshot category is that rule's coins. 016's key-hash
+// category also holds 022 (one key, other address type) and P2SH-P2WPKH
+// spends, so it carries a note rather than passing for 016 alone.
+const LIVE_QUANTUM: Record<string, { key: string; note?: string }> = {
+  '015': { key: 'quantum_p2pk' },
+  '016': { key: 'quantum_exposed_pkh', note: 'includes 022 and P2SH-P2WPKH' },
+  '019': { key: 'quantum_p2tr' },
+  '020': { key: 'quantum_p2ms' },
+  '021': { key: 'quantum_exposed_script' },
+};
+
+async function liveScales(): Promise<{ block: string | null; byId: Map<string, LiveScale> }> {
   const [snapshots, stats] = await Promise.all([getAllSnapshots(), getComputedStats(['rule_breakdown'])]);
-  const byId = new Map<string, { sats: string; count: string; unit: string }>();
+  const byId = new Map<string, LiveScale>();
   const rb = stats['rule_breakdown'];
+  if (rb) {
+    // Loss rules absent from the breakdown match nothing today (008, 013):
+    // say so, rather than fall back to a hand-written estimate.
+    for (const id of Object.keys(RULE_CHIP_LABELS)) {
+      const cat = ruleCategory(id);
+      if (id !== '002' && (cat === 'provable' || cat === 'probable')) byId.set(id, { sats: '0', count: '0', unit: 'output' });
+    }
+  }
   for (const r of rb?.data?.rules ?? []) {
     if (ruleCategory(r.rule) === 'provable' || ruleCategory(r.rule) === 'probable') {
       byId.set(r.rule, { sats: r.total_sats, count: r.utxo_count, unit: 'output' });
@@ -956,16 +975,20 @@ async function liveScales(): Promise<{ block: string | null; byId: Map<string, {
   }
   const miner = rb?.data?.miner_loss;
   if (miner) byId.set('002', { sats: miner.total_sats, count: miner.block_count, unit: 'block' });
-  for (const [id, key] of Object.entries(LIVE_QUANTUM)) {
+  for (const [id, { key, note }] of Object.entries(LIVE_QUANTUM)) {
     const s = snapshots[key];
-    if (s) byId.set(id, { sats: s.total_sats.toString(), count: s.utxo_count.toString(), unit: 'output' });
+    if (s) byId.set(id, { sats: s.total_sats.toString(), count: s.utxo_count.toString(), unit: 'output', note });
   }
   const block = rb?.computed_at_block ?? snapshots['all_utxos']?.computed_at_block ?? null;
   return { block: block === null ? null : String(block), byId };
 }
 
-const liveText = (l: { sats: string; count: string; unit: string }) =>
-  `${btc8(l.sats)} BTC · ${num(l.count)} ${l.unit}${l.count === '1' ? '' : 's'}`;
+const isNone = (l: LiveScale) => l.count === '0';
+const liveShort = (l: LiveScale) =>
+  isNone(l) ? 'none today' : `${btc8(l.sats)} BTC${l.note ? ` (${l.note})` : ''}`;
+const liveText = (l: LiveScale) =>
+  isNone(l) ? 'no matching outputs today'
+    : `${btc8(l.sats)} BTC · ${num(l.count)} ${l.unit}${l.count === '1' ? '' : 's'}${l.note ? ` · ${l.note}` : ''}`;
 
 // GET /proposals - Classification rule index
 router.get('/proposals', async (req: Request, res: Response) => {
@@ -976,7 +999,7 @@ router.get('/proposals', async (req: Request, res: Response) => {
       title: p.title,
       status: (p.fields['Status'] ?? 'Draft').toUpperCase(),
       category: (p.fields['Category'] ?? '').toUpperCase(),
-      scale: live.byId.has(p.id) ? `${btc8(live.byId.get(p.id)!.sats)} BTC` : (p.fields['Scale Estimate'] ?? '—'),
+      scale: live.byId.has(p.id) ? liveShort(live.byId.get(p.id)!) : (p.fields['Scale Estimate'] ?? '—'),
       chipClass: CATEGORY_CHIP_CLASS[(p.fields['Category'] ?? '').toUpperCase()] ?? 'chip--gray',
     }));
     res.locals.meta.description =

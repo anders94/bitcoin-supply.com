@@ -6,7 +6,7 @@
 | Status              | Draft             |
 | Created             | 2026-10-13        |
 | Category            | Quantum Vulnerable|
-| Scale Estimate      | ~400 BTC          |
+| Scale Estimate      | ~58 BTC (measured at block 974,275) |
 
 ## Problem
 

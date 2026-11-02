@@ -162,8 +162,12 @@ block content
               td #[a(href='/proposals/016') 016]
             tr
               td.l Script spends reveal every key in the script
-              td.num 1.9M BTC
+              td.num 1.1M BTC
               td #[a(href='/proposals/021') 021]
+            tr
+              td.l Wrapped SegWit (P2SH-P2WPKH) spends reveal their one key
+              td.num 0.8M BTC
+              td #[a(href='/proposals/016') 016]
             tr
               td.l Taproot outputs carry their key
               td.num 0.22M BTC
@@ -172,12 +176,13 @@ block content
               td.l Bare multisig carries its keys
               td.num &lt; 0.001M BTC
               td #[a(href='/proposals/020') 020]
+      .note--italic Approximate, and not additive: some coins fall under more than one cause, so the rows sum to more than the 3.53M gap. The two script rows are measured at block 974,275; Project Eleven reports them together as “script” (about 1.9M).
       .prose
         h3 The biggest miss was time
         p We flagged an address’s coins when it spent. Coins that arrived #[em afterwards] were never flagged, though they are exactly as exposed. That one omission was about 2.3M BTC, more than every pay-to-pubkey output combined. The fix now runs on every block: a payment to an already-exposed address is exposed on arrival.
 
         h3 One spend from a multisig reveals everyone
-        p A P2SH or P2WSH spend publishes the whole redeem or witness script, and with it every cosigner’s key, not just the ones that signed. Finding them meant re-reading every script spend in the chain’s history, block by block over the node’s RPC interface, since the database keeps no spent inputs. That walk took days and found about 1.9M BTC. Scripts that also contain a hash-lock are counted but reported separately (above), because one of their spending paths needs a secret as well as a key.
+        p A P2SH or P2WSH spend publishes the whole redeem or witness script, and with it every cosigner’s key, not just the ones that signed. Finding them meant re-reading every script spend in the chain’s history, block by block over the node’s RPC interface, since the database keeps no spent inputs. That walk took days and found about 1.9M BTC: some 1.1M behind multi-key scripts, and 0.8M at wrapped single-key SegWit addresses (#[code 3…]), whose spend reveals one key rather than a script and which we count as key hash. Scripts that also contain a hash-lock are counted but reported separately (above), because one of their spending paths needs a secret as well as a key.
 
         h3 “Never spent” is not “safe”
         p A single key has several addresses: P2PKH, P2WPKH and P2SH-wrapped P2WPKH, and two encodings (compressed and uncompressed) for older keys. Spend from any one and the key is public for all of them. A sweep for these siblings found #[strong 54,463 addresses holding 2,386 BTC] that had never spent but whose key was already public (block 973,321).
