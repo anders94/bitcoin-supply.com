@@ -1,4 +1,4 @@
-# bitcoin supply explorer v2
+# bitcoin-supply.com
 
 A Bitcoin supply explorer that answers: *"If you believe coins are lost after X years of dormancy, how much bitcoin is actually circulating?"*
 
